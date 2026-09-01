@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 from typing import Any, Protocol
+from uuid import NAMESPACE_URL, uuid5
 
 from qdrant_client import QdrantClient, models
 
@@ -81,7 +82,7 @@ class QdrantRetriever:
             }
             points.append(
                 models.PointStruct(
-                    id=chunk.chunk_id.removeprefix("chunk_"), vector=vector, payload=payload
+                    id=str(uuid5(NAMESPACE_URL, chunk.chunk_id)), vector=vector, payload=payload
                 )
             )
         try:

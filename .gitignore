@@ -16,6 +16,7 @@ __pycache__/
 node_modules/
 .next/
 coverage/
+*.tsbuildinfo
 
 # Local tooling and operating systems
 .DS_Store
