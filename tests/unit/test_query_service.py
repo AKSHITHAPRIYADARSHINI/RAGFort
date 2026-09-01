@@ -18,6 +18,21 @@ class FailingRetriever:
         raise RetrievalUnavailableError("unavailable")
 
 
+class UnrelatedRetriever:
+    def search(self, *_args, **_kwargs):
+        from backend.app.rag.models import RetrievalResult
+
+        return [
+            RetrievalResult(
+                "chunk_unrelated",
+                "doc_unrelated",
+                "Vacation days require approval.",
+                0.99,
+                {"title": "Vacation", "source": "fixture"},
+            )
+        ]
+
+
 def build_service(retriever):
     return QueryService(
         HashEmbeddingService(),
@@ -40,3 +55,9 @@ def test_empty_retrieval_returns_insufficient_context_without_generation() -> No
 def test_retrieval_failure_propagates_without_fallback() -> None:
     with pytest.raises(RetrievalUnavailableError):
         build_service(FailingRetriever()).query("What is unknown?")
+
+
+def test_unrelated_retrieval_does_not_claim_grounded_evidence() -> None:
+    result = build_service(UnrelatedRetriever()).query("What is the company stock price?")
+
+    assert result.answer_status == "insufficient_context"

@@ -13,7 +13,7 @@ Documents are normalized and chunked, embedded, and indexed as a derived Qdrant 
 | Technology | Version | Purpose and tradeoff |
 |---|---:|---|
 | FastAPI/Pydantic | existing Phase 1 ranges | Typed API and safe envelopes; explicit boundaries. |
-| qdrant-client/Qdrant | 1.19 / Compose 1.13.4 | Derived cosine vector index with payload filters; adds a service. |
+| qdrant-client/Qdrant | 1.19 / Compose 1.19.0 | Derived cosine vector index with payload filters; adds a service. |
 | HashEmbeddingService | 256 dimensions | Reproducible local/CI baseline; not production semantic-model quality. |
 | Next.js/React | 15.3.2/19.1.0 | Accessible Ask UI; browser only calls FastAPI. |
 | pytest/Ruff | existing ranges | Tests and static checks. |
@@ -84,7 +84,11 @@ Phase 2 is Query → Retrieval → Context → LLM/provider → Answer. Phase 4 
 
 ## 10. Output
 
-Measured evaluation: 20 documents/20 chunks, average chunk size 153.15 characters, 256 dimensions, cosine/dot normalized vectors. At K=5: Precision@K 0.20, Recall@K 1.0, Hit Rate@K 1.0, MRR 0.9; exact run latency evidence is versioned in `evaluation/results/phase2-retrieval.json`. Citation mapping: tested retrieval-derived only. E2E generation latency: **NOT MEASURED**. Docker Qdrant benchmark: **NOT MEASURED** because Docker Desktop daemon was unavailable.
+Measured evaluation: 20 documents/20 chunks, average chunk size 153.15 characters, 256 dimensions, cosine/dot normalized vectors. At K=5: Precision@K 0.20, Recall@K 1.0, Hit Rate@K 1.0, MRR 0.9; exact run latency evidence is versioned in `evaluation/results/phase2-retrieval.json`. Citation mapping: tested retrieval-derived only. E2E generation latency: **NOT MEASURED**. The live Docker Qdrant path was seeded and exercised, while the versioned metric runner measures deterministic retrieval computation rather than container round-trip latency.
+
+Final validation: `ruff check .` passed; `pytest` passed with 10 tests; `compileall -q backend` passed; `python -m evaluation.run` passed; frontend TypeScript lint and Next.js production build passed; `docker compose config` passed. Docker Compose started healthy Qdrant and API containers, and the composed API returned both the expected grounded remote-work answer and explicit `insufficient_context` for the unsupported stock-price question. The browser Ask flow was manually exercised for grounded, insufficient-context, and retrieval-outage states.
+
+Phase 2 files include the explicit RAG modules under `backend/app/rag/`, API and seeding support, the controlled evaluation corpus/questions/results, Ask UI, unit/integration/functional coverage, ADR-008 through ADR-012, Compose configuration, and this report. Known limitations: the deterministic hash embedding is a reproducible baseline rather than a production semantic model; measured end-to-end generation latency is not available; and the local Python 3.13 release-candidate environment cannot run `pip-audit` because of its `tomli` extension-cache error. CI retains Python 3.12 dependency scanning. Phase 3 prerequisites are the frozen Phase 2 contracts and corpus/index boundary, not production ingestion behavior.
 
 Endpoint matrix: Ask → `POST /api/v1/query`; readiness → `GET /health/ready`; sources are in the query response. All other UI API endpoints are **NOT IMPLEMENTED — FUTURE PHASE**.
 
@@ -92,4 +96,4 @@ Final security review: no browser Qdrant/LLM client, no frontend secret config, 
 
 ## Completion status
 
-**Status: PARTIAL.** Baseline RAG, Retrieval, Generation, Citations, API, Frontend, Evaluation, and Testing are functionally implemented and tested. Reliability and Git completion gates are **PARTIAL** because the required Docker-hosted Qdrant seed/manual failure run could not execute while Docker Desktop is unavailable. `phase-2-complete` was intentionally not created. Start Docker Desktop, run `docker compose up -d qdrant`, `python -m backend.scripts.seed_corpus --reset`, then repeat the documented API/UI and outage checks before requesting final Phase 2 closure. Phase 3 is not started.
+**Status: PASS.** Docker-hosted Qdrant 1.19.0 was seeded with 20 documents and 20 chunks. Live API and browser evidence verified: (1) the remote-work question returned the expected answer and the Remote Work Policy source, (2) the stock-price question returned `insufficient_context`, and (3) stopping Qdrant yielded HTTP 503 / the safe UI error state before restarting it. The outage path did not invoke a model-only fallback. `phase-2-complete` is eligible after final validation and Git review. Phase 3 is not started.

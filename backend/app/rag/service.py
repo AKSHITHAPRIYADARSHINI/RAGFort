@@ -1,3 +1,4 @@
+import re
 import time
 
 from backend.app.rag.citations import CitationFormatter
@@ -40,7 +41,14 @@ class QueryService:
         started = time.perf_counter()
         results = self.retriever.search(vector, self.top_k, filters=None)
         trace["retrieval_duration_ms"] = round((time.perf_counter() - started) * 1000, 2)
-        usable = [result for result in results if result.score >= self.min_score]
+        stop_words = {"a", "an", "are", "can", "company", "how", "is", "of", "the", "what"}
+        evidence_terms = set(re.findall(r"[a-z0-9]+", question.lower())) - stop_words
+        usable = [
+            result
+            for result in results
+            if result.score >= self.min_score
+            and evidence_terms & set(re.findall(r"[a-z0-9]+", result.text.lower()))
+        ]
         if not usable:
             return QueryOutcome(
                 answer=None,

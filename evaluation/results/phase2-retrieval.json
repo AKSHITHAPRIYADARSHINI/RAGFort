@@ -12,9 +12,9 @@
       "hit_rate_at_k": 1.0,
       "mrr": 0.9,
       "retrieval_latency_ms": {
-        "average": 0.23316666677904627,
-        "p50": 0.1805999781936407,
-        "p95": 0.38270000368356705
+        "average": 0.20106667458700636,
+        "p50": 0.2001000102609396,
+        "p95": 0.2069000038318336
       }
     },
     "5": {
@@ -23,9 +23,9 @@
       "hit_rate_at_k": 1.0,
       "mrr": 0.9,
       "retrieval_latency_ms": {
-        "average": 0.36686665650146705,
-        "p50": 0.2519999979995191,
-        "p95": 0.5293000140227377
+        "average": 0.21091667197955152,
+        "p50": 0.20700000459328294,
+        "p95": 0.22010004613548517
       }
     },
     "8": {
@@ -34,11 +34,11 @@
       "hit_rate_at_k": 1.0,
       "mrr": 0.9,
       "retrieval_latency_ms": {
-        "average": 0.29846665953906876,
-        "p50": 0.19910000264644623,
-        "p95": 0.5118999979458749
+        "average": 0.2196500039038559,
+        "p50": 0.2191000385209918,
+        "p95": 0.2253999700769782
       }
     }
   },
-  "limitations": "Deterministic development embedding; Docker Qdrant benchmark awaits Docker Desktop."
+  "limitations": "This retrieval metric runner uses the deterministic development embedding directly; container round-trip latency is measured separately by runtime checks."
 }

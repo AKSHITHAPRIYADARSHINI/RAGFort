@@ -63,7 +63,8 @@ def main() -> None:
         "similarity_metric": "cosine/dot-product on normalized vectors",
         "runs": runs,
         "limitations": (
-            "Deterministic development embedding; Docker Qdrant benchmark awaits Docker Desktop."
+            "This retrieval metric runner uses the deterministic development embedding directly; "
+            "container round-trip latency is measured separately by runtime checks."
         ),
     }
     target = Path("evaluation/results/phase2-retrieval.json")

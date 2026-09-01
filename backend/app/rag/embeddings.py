@@ -27,7 +27,10 @@ class HashEmbeddingService:
 
     def _embed(self, text: str) -> list[float]:
         vector = [0.0] * self.dimension
+        stop_words = {"a", "an", "are", "can", "company", "how", "is", "of", "the", "what"}
         for token in re.findall(r"[a-z0-9]+", text.lower()):
+            if token in stop_words:
+                continue
             index = int(hashlib.sha256(token.encode()).hexdigest(), 16) % self.dimension
             vector[index] += 1.0
         norm = math.sqrt(sum(value * value for value in vector))
