@@ -224,6 +224,38 @@ class DocumentService:
             raise InvalidTransitionError()
         return self._index(document_id)
 
+    def rescan(self, document_id: str) -> dict:
+        with self.session_factory.begin() as session:
+            document, version = self._get_current(session, document_id)
+            if version.status in {DocumentStatus.DELETED, DocumentStatus.DELETION_PENDING}:
+                raise InvalidTransitionError()
+            if hashlib.sha256(version.original_bytes).hexdigest() != version.original_sha256:
+                version.status = document.status = DocumentStatus.QUARANTINED
+                version.index_state = "NOT_INDEXED"
+                raise InvalidTransitionError()
+            extracted = _extract(
+                version.original_filename, version.detected_type, version.original_bytes
+            )
+            normalized, has_hidden = _normalize(extracted)
+            if hashlib.sha256(normalized.encode()).hexdigest() != version.content_sha256:
+                version.status = document.status = DocumentStatus.QUARANTINED
+                version.index_state = "NOT_INDEXED"
+                raise InvalidTransitionError()
+            findings = _scan(normalized, has_hidden)
+            version.findings_json = json.dumps([finding.__dict__ for finding in findings])
+            version.status = document.status = (
+                DocumentStatus.QUARANTINED
+                if any(finding.severity == "HIGH" for finding in findings)
+                else DocumentStatus.REVIEW_REQUIRED
+            )
+            version.index_state = "NOT_INDEXED"
+        if document.status == DocumentStatus.QUARANTINED:
+            try:
+                self.index.delete_by_filter({"version_id": version.id})
+            except RetrievalUnavailableError:
+                pass
+        return self.get_document(document_id, include_findings=True)
+
     def quarantine(self, document_id: str) -> dict:
         with self.session_factory.begin() as session:
             document, version = self._get_current(session, document_id)

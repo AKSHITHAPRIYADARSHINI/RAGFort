@@ -106,11 +106,19 @@ async def query(body: QueryBody, request: Request) -> JSONResponse:
 @app.post("/api/v1/documents")
 async def upload_document(request: Request, file: UploadFile = File(...)) -> JSONResponse:
     try:
-        result = get_document_service().upload(
-            file.filename or "", file.content_type, await file.read()
-        )
+        raw_bytes = await file.read(1_000_001)
+        result = get_document_service().upload(file.filename or "", file.content_type, raw_bytes)
     except DocumentError as error:
         return _document_error(error, request)
+    return JSONResponse({"success": True, "data": result, "request_id": request.state.request_id})
+
+
+@app.post("/api/v1/documents/{document_id}/scan")
+async def rescan_document(document_id: str, request: Request) -> JSONResponse:
+    try:
+        result = get_document_service().rescan(document_id)
+    except DocumentError as error:
+        return _document_error(error, request, 404 if error.code == "DOCUMENT_NOT_FOUND" else 400)
     return JSONResponse({"success": True, "data": result, "request_id": request.state.request_id})
 
 

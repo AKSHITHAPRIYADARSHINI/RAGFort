@@ -12,9 +12,7 @@ class GroundedService:
             answer="Employees may work remotely up to three days per week with manager approval.",
             answer_status="grounded",
             sources=(
-                SourceCitation(
-                    "doc_remote_work", "chunk_remote", "Remote Work Policy", "fixture"
-                ),
+                SourceCitation("doc_remote_work", "chunk_remote", "Remote Work Policy", "fixture"),
             ),
         )
 
