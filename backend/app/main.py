@@ -33,7 +33,11 @@ async def readiness(request: Request) -> JSONResponse:
     constant with verified, fail-closed checks for critical dependencies.
     """
     return JSONResponse(
-        {"success": True, "data": {"status": "ready"}, "request_id": request.state.request_id}
+        {
+            "success": True,
+            "data": {"status": "foundation-ready", "phase": 1},
+            "request_id": request.state.request_id,
+        }
     )
 
 

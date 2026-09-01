@@ -10,16 +10,16 @@ Success: `{"success":true,"data":{},"request_id":"req_..."}`. Error: `{"success"
 
 | UI | Endpoint | Method | Authorization | Purpose |
 |---|---|---|---|---|
-| Ask | `/query` | POST | Authenticated + query policy | Secure RAG request (Phase 2+) |
-| Ask status | `/query/{request_id}` | GET | Owner or tenant-scoped analyst | Safe request status |
-| Documents | `/documents` | GET/POST | Authenticated + document ABAC; contributor to upload | Authorized inventory/upload |
-| Document | `/documents/{id}` | GET/DELETE | Document ABAC + explicit delete permission | Metadata or deletion workflow |
-| Document workflow | `/documents/{id}/scan`, `/approve`, `/quarantine` | POST | Privileged document role + tenant scope | Phase 3 lifecycle |
-| Security | `/security/overview`, `/security/events` | GET | Analyst+ and tenant scope | Redacted metrics/events |
-| Security event | `/security/events/{id}` | GET | Analyst+ and tenant scope | Protected event detail |
-| Tests | `/tests`, `/tests/run`, `/tests/runs/{id}`, `/tests/runs/{id}/results` | GET/POST | Analyst+; run needs authorized suite | Actual test evidence |
-| Activity | `/audit`, `/audit/{id}` | GET | Analyst+ tenant scope; user may later see own limited data | Audit trail |
-| Auth | `/auth/me`, `/auth/logout` | GET/POST | Authenticated | Session identity/logout |
+| Ask | `/api/v1/query` | POST | Authenticated + query policy | Secure RAG request (Phase 2+) |
+| Ask status | `/api/v1/query/{request_id}` | GET | Owner or tenant-scoped analyst | Safe request status |
+| Documents | `/api/v1/documents` | GET/POST | Authenticated + document ABAC; contributor to upload | Authorized inventory/upload |
+| Document | `/api/v1/documents/{id}` | GET/DELETE | Document ABAC + explicit delete permission | Metadata or deletion workflow |
+| Document workflow | `/api/v1/documents/{id}/scan`, `/api/v1/documents/{id}/approve`, `/api/v1/documents/{id}/quarantine` | POST | Privileged document role + tenant scope | Phase 3 lifecycle |
+| Security | `/api/v1/security/overview`, `/api/v1/security/events` | GET | Analyst+ and tenant scope | Redacted metrics/events |
+| Security event | `/api/v1/security/events/{id}` | GET | Analyst+ and tenant scope | Protected event detail |
+| Tests | `/api/v1/tests`, `/api/v1/tests/run`, `/api/v1/tests/runs/{id}`, `/api/v1/tests/runs/{id}/results` | GET/POST | Analyst+; run needs authorized suite | Actual test evidence |
+| Activity | `/api/v1/audit`, `/api/v1/audit/{id}` | GET | Analyst+ tenant scope; user may later see own limited data | Audit trail |
+| Auth | `/api/v1/auth/me`, `/api/v1/auth/logout` | GET/POST | Authenticated | Session identity/logout |
 | Health | `/health/live`, `/health/ready` | GET | Live public process-only; ready internal/gateway-protected | Minimal operational state |
 
 Mutations will require an idempotency key when replay could create a new action. Cookie auth requires CSRF defenses; bearer auth requires validated OIDC issuer/audience and short expiry. Every resource lookup independently applies tenant and ABAC predicates.
