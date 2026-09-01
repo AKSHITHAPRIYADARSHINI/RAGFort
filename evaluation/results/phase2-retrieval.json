@@ -1,0 +1,44 @@
+{
+  "corpus_documents": 20,
+  "chunk_count": 20,
+  "average_chunk_chars": 153.15,
+  "embedding_model": "hash-embedding-v1",
+  "vector_dimension": 256,
+  "similarity_metric": "cosine/dot-product on normalized vectors",
+  "runs": {
+    "3": {
+      "precision_at_k": 0.3333333333333333,
+      "recall_at_k": 1.0,
+      "hit_rate_at_k": 1.0,
+      "mrr": 0.9,
+      "retrieval_latency_ms": {
+        "average": 0.28326666021409136,
+        "p50": 0.22529996931552887,
+        "p95": 0.4846000229008496
+      }
+    },
+    "5": {
+      "precision_at_k": 0.2,
+      "recall_at_k": 1.0,
+      "hit_rate_at_k": 1.0,
+      "mrr": 0.9,
+      "retrieval_latency_ms": {
+        "average": 0.23728335509076715,
+        "p50": 0.21999998716637492,
+        "p95": 0.3033000393770635
+      }
+    },
+    "8": {
+      "precision_at_k": 0.125,
+      "recall_at_k": 1.0,
+      "hit_rate_at_k": 1.0,
+      "mrr": 0.9,
+      "retrieval_latency_ms": {
+        "average": 0.1911333432265868,
+        "p50": 0.1860000193119049,
+        "p95": 0.21009996999055147
+      }
+    }
+  },
+  "limitations": "Deterministic development embedding; Docker Qdrant benchmark awaits Docker Desktop."
+}

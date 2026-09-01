@@ -1,0 +1,8 @@
+[
+  {"id":"eval_remote","question":"How many days per week can employees work remotely?","expected_documents":["doc_remote_work"],"keywords":["three days","manager approval"]},
+  {"id":"eval_vacation","question":"How many paid vacation days do full-time employees receive?","expected_documents":["doc_vacation"],"keywords":["twenty","vacation days"]},
+  {"id":"eval_expenses","question":"When are receipts required for expenses?","expected_documents":["doc_expenses"],"keywords":["twenty-five","receipts"]},
+  {"id":"eval_password","question":"How long must corporate passwords be?","expected_documents":["doc_passwords"],"keywords":["fourteen","password"]},
+  {"id":"eval_vendor","question":"When does a new vendor need a risk review?","expected_documents":["doc_vendor_management"],"keywords":["before contract","risk review"]},
+  {"id":"eval_unsupported","question":"What is the company stock price?","expected_documents":[],"keywords":[]}
+]
