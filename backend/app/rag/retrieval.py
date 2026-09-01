@@ -90,6 +90,16 @@ class QdrantRetriever:
         except Exception as error:
             raise RetrievalUnavailableError("Retrieval service is unavailable.") from error
 
+    def delete_by_filter(self, filters: Mapping[str, Any]) -> None:
+        try:
+            self.client.delete(
+                collection_name=self.collection,
+                points_selector=models.FilterSelector(filter=self._filter(filters)),
+                wait=True,
+            )
+        except Exception as error:
+            raise RetrievalUnavailableError("Retrieval service is unavailable.") from error
+
     def ensure_collection(self, dimension: int, reset: bool = False) -> None:
         try:
             exists = self.client.collection_exists(self.collection)

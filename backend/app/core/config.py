@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Settings:
+    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./ragfort-documents.db")
     qdrant_url: str = os.getenv("QDRANT_URL", "http://localhost:6333")
     qdrant_collection: str = os.getenv("QDRANT_COLLECTION", "ragfort_phase2")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "hash-embedding-v1")

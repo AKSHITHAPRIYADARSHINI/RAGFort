@@ -2,12 +2,13 @@
 
 from uuid import uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, File, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from backend.app.core.dependencies import get_query_service, get_settings
+from backend.app.core.dependencies import get_document_service, get_query_service, get_settings
+from backend.app.documents.models import DocumentError
 from backend.app.rag.embeddings import EmbeddingUnavailableError
 from backend.app.rag.generation import GenerationUnavailableError
 from backend.app.rag.retrieval import RetrievalUnavailableError
@@ -17,13 +18,24 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=False,
-    allow_methods=["POST", "GET"],
+    allow_methods=["POST", "GET", "DELETE"],
     allow_headers=["Content-Type"],
 )
 
 
 class QueryBody(BaseModel):
     query: str
+
+
+def _document_error(error: DocumentError, request: Request, status_code: int = 400) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "success": False,
+            "error": {"code": error.code, "message": error.message},
+            "request_id": request.state.request_id,
+        },
+    )
 
 
 @app.middleware("http")
@@ -89,6 +101,73 @@ async def query(body: QueryBody, request: Request) -> JSONResponse:
     if outcome.trace is not None:
         data["trace"] = outcome.trace
     return JSONResponse({"success": True, "data": data, "request_id": request.state.request_id})
+
+
+@app.post("/api/v1/documents")
+async def upload_document(request: Request, file: UploadFile = File(...)) -> JSONResponse:
+    try:
+        result = get_document_service().upload(
+            file.filename or "", file.content_type, await file.read()
+        )
+    except DocumentError as error:
+        return _document_error(error, request)
+    return JSONResponse({"success": True, "data": result, "request_id": request.state.request_id})
+
+
+@app.get("/api/v1/documents")
+async def list_documents(request: Request) -> JSONResponse:
+    try:
+        result = get_document_service().list_documents()
+    except Exception:
+        return _document_error(DocumentError(), request, 503)
+    return JSONResponse(
+        {"success": True, "data": {"documents": result}, "request_id": request.state.request_id}
+    )
+
+
+@app.get("/api/v1/documents/{document_id}")
+async def document_detail(document_id: str, request: Request) -> JSONResponse:
+    try:
+        result = get_document_service().get_document(document_id)
+    except DocumentError as error:
+        return _document_error(error, request, 404 if error.code == "DOCUMENT_NOT_FOUND" else 400)
+    return JSONResponse({"success": True, "data": result, "request_id": request.state.request_id})
+
+
+@app.get("/api/v1/documents/{document_id}/security")
+async def document_security(document_id: str, request: Request) -> JSONResponse:
+    try:
+        result = get_document_service().get_document(document_id, include_findings=True)
+    except DocumentError as error:
+        return _document_error(error, request, 404 if error.code == "DOCUMENT_NOT_FOUND" else 400)
+    return JSONResponse({"success": True, "data": result, "request_id": request.state.request_id})
+
+
+@app.post("/api/v1/documents/{document_id}/approve")
+async def approve_document(document_id: str, request: Request) -> JSONResponse:
+    try:
+        result = get_document_service().approve(document_id)
+    except DocumentError as error:
+        return _document_error(error, request)
+    return JSONResponse({"success": True, "data": result, "request_id": request.state.request_id})
+
+
+@app.post("/api/v1/documents/{document_id}/quarantine")
+async def quarantine_document(document_id: str, request: Request) -> JSONResponse:
+    try:
+        result = get_document_service().quarantine(document_id)
+    except DocumentError as error:
+        return _document_error(error, request, 404 if error.code == "DOCUMENT_NOT_FOUND" else 400)
+    return JSONResponse({"success": True, "data": result, "request_id": request.state.request_id})
+
+
+@app.delete("/api/v1/documents/{document_id}")
+async def delete_document(document_id: str, request: Request) -> JSONResponse:
+    try:
+        result = get_document_service().delete(document_id)
+    except DocumentError as error:
+        return _document_error(error, request, 404 if error.code == "DOCUMENT_NOT_FOUND" else 400)
+    return JSONResponse({"success": True, "data": result, "request_id": request.state.request_id})
 
 
 def _rag_unavailable(code: str, request: Request) -> JSONResponse:
