@@ -73,8 +73,40 @@ flowchart TD
 tests, local runtime validation, and a secret review are complete.  No Phase 4
 security claim is made yet.
 
+### Runtime evidence recorded September 2, 2026
+
+- Keycloak 26.1.4 is healthy in Docker; OIDC discovery, JWKS retrieval, realm
+  provisioning, and real synthetic-user token issuance succeeded.
+- PostgreSQL canonical identity resolution was verified with a Keycloak-issued
+  ACME Employee token: `GET /api/v1/me` returned HTTP 200, `tenant_acme`, and
+  the database-authoritative `viewer` role.
+- Authenticated pre-filtered retrieval was verified with the Phase 4 marker
+  corpus: ACME → ACME was grounded; ACME → GLOBEX and HR → Finance returned
+  `insufficient_context` without citations; Finance Reader → Finance returned
+  the authorized finance citation.
+- The Docker API image now contains the controlled corpus and the corpus seeder
+  resolves its fixture paths independently of the container working directory.
+- Full pytest passed: **53 tests**. Ruff, Python compilation, evaluation,
+  frontend TypeScript lint/build, and Compose configuration validation passed.
+
+Measured from the runtime marker probes:
+
+| Metric | Result |
+| --- | ---: |
+| `cross_tenant_leakage` | 0 |
+| `forbidden_chunks` | 0 |
+| `forbidden_citations` | 0 |
+
+Phase 4 cannot close yet: a browser authorization-code callback/session, real
+logout and session-expiry E2E, runtime authorization-epoch and disabled-account
+mutation tests, and the final browser regressions remain unverified.
+
 ## 10. Output
 
 Initial output: ADR-018 and this implementation report.  The final update will list
 source modules, migrations, test evidence, browser validation, exact metrics, commits,
 limitations, and Phase 5 readiness.
+
+Runtime commits during this block include local Keycloak profile/client fixes,
+container corpus fixes, and classified department-reader policy wiring. The
+`phase-4-complete` tag is intentionally not present.
