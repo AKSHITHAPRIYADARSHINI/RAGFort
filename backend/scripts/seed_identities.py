@@ -267,6 +267,7 @@ class KeycloakAdmin:
             "username": identity.key,
             "enabled": True,
             "emailVerified": True,
+            "email": f"{identity.key}@ragfort.local",
             "requiredActions": [],
             "firstName": identity.display_name,
             "attributes": {"tenant_id": [identity.tenant_id], "department": [identity.department]},
