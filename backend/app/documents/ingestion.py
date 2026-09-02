@@ -373,6 +373,10 @@ class DocumentService:
             "name": document.safe_display_name,
             "status": document.status,
             "classification": document.classification,
+            # Routes use this authoritative field for tenant checks before
+            # serializing a permitted record.  It is never derived from a
+            # caller-controlled document request.
+            "tenant_id": document.tenant_id,
             "detected_type": version.detected_type,
             "size_bytes": version.byte_size,
             "index_state": version.index_state,
