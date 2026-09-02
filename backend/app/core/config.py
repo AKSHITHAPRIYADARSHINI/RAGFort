@@ -13,3 +13,12 @@ class Settings:
     rag_min_retrieval_score: float = float(os.getenv("RAG_MIN_RETRIEVAL_SCORE", "0.12"))
     rag_query_max_chars: int = int(os.getenv("RAG_QUERY_MAX_CHARS", "2000"))
     ragfort_dev_trace: bool = os.getenv("RAGFORT_DEV_TRACE", "false").lower() == "true"
+    oidc_issuer: str = os.getenv("OIDC_ISSUER", "")
+    oidc_audience: str = os.getenv("OIDC_AUDIENCE", "ragfort-api")
+    oidc_jwks_url: str = os.getenv("OIDC_JWKS_URL", "")
+    oidc_algorithms: tuple[str, ...] = tuple(
+        item.strip()
+        for item in os.getenv("OIDC_JWT_ALGORITHMS", "RS256").split(",")
+        if item.strip()
+    )
+    oidc_tenant_claim: str = os.getenv("OIDC_TENANT_CLAIM", "tenant_id")

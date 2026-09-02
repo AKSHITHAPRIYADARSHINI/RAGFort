@@ -11,6 +11,7 @@ class Principal:
     issuer: str
     authenticated_at: int | None = None
     display_name: str | None = None
+    tenant_hint: str | None = None
 
     def __post_init__(self) -> None:
         if not self.subject.strip() or not self.issuer.strip():
