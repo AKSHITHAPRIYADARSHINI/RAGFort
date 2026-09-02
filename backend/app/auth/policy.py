@@ -53,6 +53,8 @@ class AuthorizationService:
 
     _ROLE_PERMISSIONS: Mapping[str, frozenset[str]] = {
         "viewer": frozenset({"query", "document:read"}),
+        "finance_reader": frozenset({"query", "document:read"}),
+        "hr_reader": frozenset({"query", "document:read"}),
         "contributor": frozenset({"query", "document:read", "document:upload"}),
         "reviewer": frozenset(
             {"query", "document:read", "document:upload", "document:scan", "document:review"}
@@ -70,6 +72,11 @@ class AuthorizationService:
     }
     _ROLE_CLASSIFICATIONS: Mapping[str, frozenset[str]] = {
         "viewer": frozenset({"PUBLIC", "INTERNAL"}),
+        # Department reader roles grant the confidential tier required by their
+        # explicit document ACL.  The Qdrant scope still requires that ACL to
+        # match, so this alone never grants cross-department access.
+        "finance_reader": frozenset({"PUBLIC", "INTERNAL", "CONFIDENTIAL"}),
+        "hr_reader": frozenset({"PUBLIC", "INTERNAL", "CONFIDENTIAL"}),
         "contributor": frozenset({"PUBLIC", "INTERNAL"}),
         "reviewer": frozenset({"PUBLIC", "INTERNAL", "CONFIDENTIAL"}),
         "admin": frozenset({"PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"}),
