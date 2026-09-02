@@ -26,6 +26,7 @@ from backend.app.documents.persistence import make_session_factory
 
 REALM = "ragfort-local"
 FRONTEND_CLIENT_ID = "ragfort-frontend"
+RUNTIME_CLIENT_ID = "ragfort-runtime-test"
 API_AUDIENCE = "ragfort-api"
 DEFAULT_ISSUER = f"http://localhost:8080/realms/{REALM}"
 
@@ -179,10 +180,28 @@ class KeycloakAdmin:
         )
         if not clients:
             self._admin_request("POST", f"/realms/{REALM}/clients", payload)
+            return
+        # Keep the local realm declarative and idempotent when its configuration
+        # changes between development runs.
+        self._admin_request("PUT", f"/realms/{REALM}/clients/{clients[0]['id']}", payload)
 
     def ensure_clients(self) -> None:
         self.ensure_client(
             API_AUDIENCE, {"clientId": API_AUDIENCE, "bearerOnly": True, "enabled": True}
+        )
+        # This client exists solely for non-browser local runtime validation.
+        # The browser client remains authorization-code-only; no production
+        # configuration enables the password grant.
+        self.ensure_client(
+            RUNTIME_CLIENT_ID,
+            {
+                "clientId": RUNTIME_CLIENT_ID,
+                "enabled": True,
+                "publicClient": True,
+                "standardFlowEnabled": False,
+                "directAccessGrantsEnabled": True,
+                "protocol": "openid-connect",
+            },
         )
         self.ensure_client(
             FRONTEND_CLIENT_ID,
@@ -262,7 +281,10 @@ class KeycloakAdmin:
         self._admin_request(
             "PUT",
             f"/realms/{REALM}/users/{user_id}/reset-password",
-            {"type": "password", "temporary": True, "value": password},
+            # Synthetic identities are used only in the ignored local profile.
+            # A non-temporary password permits the isolated runtime test client
+            # to obtain a token; browser login remains authorization-code-only.
+            {"type": "password", "temporary": False, "value": password},
         )
         desired_roles = [self.ensure_role(role) for role in identity.role_names]
         self._admin_request(
@@ -306,13 +328,16 @@ def persist_application_identities(
                     issuer=issuer,
                     subject=subjects[identity.key],
                     display_name=identity.display_name,
+                    department=identity.department,
                     active=True,
                     authorization_epoch=0,
                 )
                 session.add(user)
                 session.flush()
             else:
-                user.display_name, user.active = identity.display_name, True
+                user.display_name = identity.display_name
+                user.department = identity.department
+                user.active = True
             membership = session.scalar(
                 select(TenantMembershipRecord).where(
                     TenantMembershipRecord.user_id == user.id,
