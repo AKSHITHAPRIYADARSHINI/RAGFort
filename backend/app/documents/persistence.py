@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, LargeBinary, String, Text, create_engine
+from sqlalchemy import DateTime, Integer, LargeBinary, String, Text, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 
@@ -14,6 +14,12 @@ class DocumentRecord(Base):
     safe_display_name: Mapped[str] = mapped_column(String(255), index=True)
     status: Mapped[str] = mapped_column(String(32), index=True)
     classification: Mapped[str] = mapped_column(String(32))
+    # Phase 4 access state is authoritative in PostgreSQL.  It is copied into
+    # Qdrant only as derived, query-time filtering metadata.
+    tenant_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    allowed_role_ids_json: Mapped[str] = mapped_column(Text, default="[]")
+    department: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    authorization_metadata_version: Mapped[int] = mapped_column(Integer, default=0)
     current_version_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -36,6 +42,14 @@ class DocumentVersionRecord(Base):
     normalized_text: Mapped[str] = mapped_column(Text)
     findings_json: Mapped[str] = mapped_column(Text, default="[]")
     index_state: Mapped[str] = mapped_column(String(32), default="NOT_INDEXED")
+    # Snapshot access state so an old version cannot be reindexed under a
+    # newer document ACL without an explicit authoritative update.
+    tenant_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    classification: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    allowed_role_ids_json: Mapped[str] = mapped_column(Text, default="[]")
+    department: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    authorization_metadata_version: Mapped[int] = mapped_column(Integer, default=0)
+    current_version: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -43,4 +57,41 @@ def make_session_factory(database_url: str):
     connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
     engine = create_engine(database_url, future=True, connect_args=connect_args)
     Base.metadata.create_all(engine)
+    _upgrade_phase4_document_access_columns(engine)
     return sessionmaker(bind=engine, expire_on_commit=False)
+
+
+def _upgrade_phase4_document_access_columns(engine) -> None:
+    """Additive compatibility upgrade for Phase 3 development databases.
+
+    This deliberately does not backfill a permissive access rule.  Existing
+    points and records remain unqueryable until Phase 4 assigns metadata and
+    rebuilds derived vectors.  A formal production migration can use the same
+    column set without drop/recreate behaviour.
+    """
+    additions = {
+        "documents": {
+            "tenant_id": "VARCHAR(64)",
+            "allowed_role_ids_json": "TEXT DEFAULT '[]'",
+            "department": "VARCHAR(128)",
+            "authorization_metadata_version": "INTEGER DEFAULT 0",
+        },
+        "document_versions": {
+            "tenant_id": "VARCHAR(64)",
+            "classification": "VARCHAR(32)",
+            "allowed_role_ids_json": "TEXT DEFAULT '[]'",
+            "department": "VARCHAR(128)",
+            "authorization_metadata_version": "INTEGER DEFAULT 0",
+            "current_version": "BOOLEAN DEFAULT 1",
+        },
+    }
+    inspector = inspect(engine)
+    with engine.begin() as connection:
+        for table_name, columns in additions.items():
+            if table_name not in inspector.get_table_names():
+                continue
+            existing = {column["name"] for column in inspector.get_columns(table_name)}
+            for column_name, ddl in columns.items():
+                if column_name not in existing:
+                    statement = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {ddl}"
+                    connection.execute(text(statement))

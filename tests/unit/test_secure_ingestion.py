@@ -4,6 +4,7 @@ import pytest
 
 from backend.app.documents.ingestion import DocumentService
 from backend.app.documents.models import (
+    DocumentAccessAssignment,
     DocumentStatus,
     UnsupportedMediaError,
 )
@@ -120,3 +121,47 @@ def test_integrity_mismatch_quarantines_before_indexing(tmp_path: Path) -> None:
 
     assert service.get_document(uploaded["document_id"])["status"] == DocumentStatus.QUARANTINED
     assert not index.chunks
+
+
+def test_index_payload_contains_complete_server_owned_phase4_access_metadata(
+    tmp_path: Path,
+) -> None:
+    service, _, index = build_service(tmp_path)
+    access = DocumentAccessAssignment(
+        tenant_id="tenant_acme", allowed_role_ids=("viewer", "finance_reader")
+    )
+    uploaded = service.upload(
+        "access-policy.txt", "text/plain", b"FALCON-AMBER-731 is internal.", access=access
+    )
+    service.approve(uploaded["document_id"])
+
+    metadata = index.chunks[0].metadata
+    assert metadata["tenant_id"] == "tenant_acme"
+    assert metadata["classification"] == "INTERNAL"
+    assert metadata["allowed_role_ids"] == ["viewer", "finance_reader"]
+    assert metadata["approval_status"] == "approved"
+    assert metadata["document_status"] == DocumentStatus.INDEXED
+    assert metadata["index_state"] == "INDEXED"
+    assert metadata["current_version"] is True
+    assert metadata["authorization_metadata_version"] == 4
+
+
+def test_phase3_database_is_upgraded_additively_without_permissive_backfill(
+    tmp_path: Path,
+) -> None:
+    from sqlalchemy import create_engine, text
+
+    path = tmp_path / "phase3.db"
+    engine = create_engine(f"sqlite:///{path}")
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE documents (id VARCHAR(40) PRIMARY KEY)"))
+        connection.execute(text("CREATE TABLE document_versions (id VARCHAR(40) PRIMARY KEY)"))
+        connection.execute(text("INSERT INTO documents (id) VALUES ('doc_legacy')"))
+    # The Phase 4 factory upgrades columns without replacing the existing rows.
+    make_session_factory(f"sqlite:///{path}")
+    with engine.connect() as connection:
+        row = connection.execute(
+            text("SELECT tenant_id, allowed_role_ids_json FROM documents")
+        ).first()
+    assert row.tenant_id is None
+    assert row.allowed_role_ids_json == "[]"

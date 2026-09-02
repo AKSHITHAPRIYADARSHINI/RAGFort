@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.documents.models import (
     Classification,
+    DocumentAccessAssignment,
     DocumentError,
     DocumentNotFoundError,
     DocumentStatus,
@@ -101,14 +102,31 @@ class DocumentService:
     """Explicit Phase 3 pipeline. Browser input never controls lifecycle or index metadata."""
 
     def __init__(
-        self, session_factory, embeddings: EmbeddingService, index: QdrantRetriever
+        self,
+        session_factory,
+        embeddings: EmbeddingService,
+        index: QdrantRetriever,
+        *,
+        default_access: DocumentAccessAssignment | None = None,
     ) -> None:
         self.session_factory = session_factory
         self.embeddings = embeddings
         self.index = index
         self.chunker = DocumentChunker()
+        # Compatibility for the controlled Phase 3 development corpus only.
+        # Runtime routes must provide an assignment derived from RequestContext.
+        self.default_access = default_access or DocumentAccessAssignment(
+            tenant_id="tenant_development", allowed_role_ids=("viewer",)
+        )
 
-    def upload(self, filename: str, declared_type: str | None, data: bytes) -> dict:
+    def upload(
+        self,
+        filename: str,
+        declared_type: str | None,
+        data: bytes,
+        *,
+        access: DocumentAccessAssignment | None = None,
+    ) -> dict:
         del declared_type  # advisory only; signature and bytes are authoritative.
         if not data:
             raise FileValidationError()
@@ -121,6 +139,7 @@ class DocumentService:
         findings = _scan(normalized, has_hidden)
         original_hash = hashlib.sha256(data).hexdigest()
         content_hash = hashlib.sha256(normalized.encode()).hexdigest()
+        assignment = access or self.default_access
         with self.session_factory.begin() as session:
             duplicate = session.scalar(
                 select(DocumentVersionRecord).where(
@@ -138,6 +157,10 @@ class DocumentService:
                     safe_display_name=safe_name,
                     status=DocumentStatus.REVIEW_REQUIRED,
                     classification=Classification.INTERNAL,
+                    tenant_id=assignment.tenant_id,
+                    allowed_role_ids_json=json.dumps(list(assignment.allowed_role_ids)),
+                    department=assignment.department,
+                    authorization_metadata_version=assignment.metadata_version,
                 )
                 session.add(document)
                 version_number = 1
@@ -151,6 +174,17 @@ class DocumentService:
                     or 0
                 )
                 version_number += 1
+                # A new version belongs to the existing server-owned document
+                # access boundary; client uploads cannot change it.
+                assignment = self._access_assignment(document)
+                prior_versions = session.scalars(
+                    select(DocumentVersionRecord).where(
+                        DocumentVersionRecord.document_id == document.id,
+                        DocumentVersionRecord.current_version.is_(True),
+                    )
+                ).all()
+                for prior in prior_versions:
+                    prior.current_version = False
             status = (
                 DocumentStatus.QUARANTINED
                 if any(f.severity == "HIGH" for f in findings)
@@ -170,6 +204,12 @@ class DocumentService:
                 normalized_text=normalized,
                 findings_json=json.dumps([finding.__dict__ for finding in findings]),
                 index_state="NOT_INDEXED",
+                tenant_id=assignment.tenant_id,
+                classification=document.classification,
+                allowed_role_ids_json=json.dumps(list(assignment.allowed_role_ids)),
+                department=assignment.department,
+                authorization_metadata_version=assignment.metadata_version,
+                current_version=True,
             )
             document.status = status
             document.current_version_id = version.id
@@ -276,6 +316,7 @@ class DocumentService:
             document, version = self._get_current(session, document_id)
             if version.status != DocumentStatus.APPROVED:
                 raise InvalidTransitionError()
+            payload = self._secure_index_metadata(document, version)
             source = Document(
                 document.id,
                 document.safe_display_name,
@@ -292,12 +333,7 @@ class DocumentService:
                     chunk.text,
                     {
                         **chunk.metadata,
-                        "version_id": version.id,
-                        "classification": document.classification,
-                        "approval_status": "approved",
-                        "index_state": "indexed",
-                        "content_sha256": version.content_sha256,
-                        "security_scan_status": "passed",
+                        **payload,
                     },
                 )
                 for chunk in chunks
@@ -344,4 +380,58 @@ class DocumentService:
             "uploaded_at": version.created_at.isoformat()
             if version.created_at
             else datetime.utcnow().isoformat(),
+        }
+
+    @staticmethod
+    def _access_assignment(document: DocumentRecord) -> DocumentAccessAssignment:
+        try:
+            roles = tuple(str(role) for role in json.loads(document.allowed_role_ids_json))
+        except (TypeError, ValueError, json.JSONDecodeError) as error:
+            raise InvalidTransitionError() from error
+        try:
+            return DocumentAccessAssignment(
+                tenant_id=document.tenant_id or "",
+                allowed_role_ids=roles,
+                department=document.department,
+                metadata_version=document.authorization_metadata_version,
+            )
+        except ValueError as error:
+            raise InvalidTransitionError() from error
+
+    def _secure_index_metadata(
+        self, document: DocumentRecord, version: DocumentVersionRecord
+    ) -> dict[str, object]:
+        """Build the complete derived Phase 4 payload or refuse to index.
+
+        Missing metadata never means public.  Qdrant receives this payload only
+        after the authoritative document/version state passes Phase 3 integrity
+        and approval checks above.
+        """
+        assignment = self._access_assignment(document)
+        if (
+            version.tenant_id != assignment.tenant_id
+            or version.classification != document.classification
+            or version.authorization_metadata_version != assignment.metadata_version
+            or not version.current_version
+        ):
+            raise InvalidTransitionError()
+        try:
+            version_roles = tuple(str(role) for role in json.loads(version.allowed_role_ids_json))
+        except (TypeError, ValueError, json.JSONDecodeError) as error:
+            raise InvalidTransitionError() from error
+        if version_roles != assignment.allowed_role_ids:
+            raise InvalidTransitionError()
+        return {
+            "version_id": version.id,
+            "tenant_id": assignment.tenant_id,
+            "classification": document.classification,
+            "allowed_role_ids": list(assignment.allowed_role_ids),
+            "department": assignment.department,
+            "authorization_metadata_version": assignment.metadata_version,
+            "approval_status": "approved",
+            "document_status": DocumentStatus.INDEXED,
+            "index_state": "INDEXED",
+            "current_version": True,
+            "content_sha256": version.content_sha256,
+            "security_scan_status": "passed",
         }
