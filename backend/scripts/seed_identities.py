@@ -230,48 +230,49 @@ class KeycloakAdmin:
                 "protocol": "openid-connect",
             },
         )
-        clients = self._admin_request(
-            "GET", f"/realms/{REALM}/clients?{urlencode({'clientId': FRONTEND_CLIENT_ID})}"
-        )
-        client_uuid = clients[0]["id"]
-        mappers = self._admin_request(
-            "GET", f"/realms/{REALM}/clients/{client_uuid}/protocol-mappers/models"
-        )
-        names = {mapper["name"] for mapper in mappers}
-        mapper_path = f"/realms/{REALM}/clients/{client_uuid}/protocol-mappers/models"
-        if "tenant-id" not in names:
-            self._admin_request(
-                "POST",
-                mapper_path,
-                {
-                    "name": "tenant-id",
-                    "protocol": "openid-connect",
-                    "protocolMapper": "oidc-usermodel-attribute-mapper",
-                    "config": {
-                        "user.attribute": "tenant_id",
-                        "claim.name": "tenant_id",
-                        "jsonType.label": "String",
-                        "access.token.claim": "true",
-                        "id.token.claim": "true",
-                        "userinfo.token.claim": "true",
-                    },
-                },
+        for client_id in (FRONTEND_CLIENT_ID, RUNTIME_CLIENT_ID):
+            clients = self._admin_request(
+                "GET", f"/realms/{REALM}/clients?{urlencode({'clientId': client_id})}"
             )
-        if "ragfort-api-audience" not in names:
-            self._admin_request(
-                "POST",
-                mapper_path,
-                {
-                    "name": "ragfort-api-audience",
-                    "protocol": "openid-connect",
-                    "protocolMapper": "oidc-audience-mapper",
-                    "config": {
-                        "included.client.audience": API_AUDIENCE,
-                        "access.token.claim": "true",
-                        "id.token.claim": "false",
-                    },
-                },
+            client_uuid = clients[0]["id"]
+            mappers = self._admin_request(
+                "GET", f"/realms/{REALM}/clients/{client_uuid}/protocol-mappers/models"
             )
+            names = {mapper["name"] for mapper in mappers}
+            mapper_path = f"/realms/{REALM}/clients/{client_uuid}/protocol-mappers/models"
+            if "tenant-id" not in names:
+                self._admin_request(
+                    "POST",
+                    mapper_path,
+                    {
+                        "name": "tenant-id",
+                        "protocol": "openid-connect",
+                        "protocolMapper": "oidc-usermodel-attribute-mapper",
+                        "config": {
+                            "user.attribute": "tenant_id",
+                            "claim.name": "tenant_id",
+                            "jsonType.label": "String",
+                            "access.token.claim": "true",
+                            "id.token.claim": "true",
+                            "userinfo.token.claim": "true",
+                        },
+                    },
+                )
+            if "ragfort-api-audience" not in names:
+                self._admin_request(
+                    "POST",
+                    mapper_path,
+                    {
+                        "name": "ragfort-api-audience",
+                        "protocol": "openid-connect",
+                        "protocolMapper": "oidc-audience-mapper",
+                        "config": {
+                            "included.client.audience": API_AUDIENCE,
+                            "access.token.claim": "true",
+                            "id.token.claim": "false",
+                        },
+                    },
+                )
 
     def ensure_user(self, identity: SyntheticIdentity, password: str) -> str:
         users = self._admin_request(
