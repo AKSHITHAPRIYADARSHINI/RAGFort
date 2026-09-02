@@ -59,9 +59,11 @@ def _secure_chunks(chunker: DocumentChunker, record: dict[str, object]) -> list[
 
 def load_seed_chunks() -> tuple[list[dict[str, object]], list[DocumentChunk]]:
     """Load the baseline corpus plus isolated Phase 4 tenant test fixtures."""
-    baseline = json.loads(Path("evaluation/corpus/documents.json").read_text(encoding="utf-8"))
+    repository_root = Path(__file__).resolve().parents[2]
+    corpus_directory = repository_root / "evaluation" / "corpus"
+    baseline = json.loads((corpus_directory / "documents.json").read_text(encoding="utf-8"))
     phase4 = json.loads(
-        Path("evaluation/corpus/phase4-security-documents.json").read_text(encoding="utf-8")
+        (corpus_directory / "phase4-security-documents.json").read_text(encoding="utf-8")
     )
     records = [*baseline, *phase4]
     chunker = DocumentChunker()
