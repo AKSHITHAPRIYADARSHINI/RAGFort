@@ -9,7 +9,11 @@ from pydantic import BaseModel, ConfigDict
 
 from backend.app.auth.dependencies import AuthenticationError, AuthenticationUnavailableError
 from backend.app.auth.models import RequestContext
-from backend.app.auth.policy import AuthorizationDeniedError, AuthorizationService
+from backend.app.auth.policy import (
+    AuthorizationDeniedError,
+    AuthorizationService,
+    ResourceAttributes,
+)
 from backend.app.core.dependencies import (
     get_document_service,
     get_query_service,
@@ -125,6 +129,45 @@ def _scope(context: RequestContext) -> RetrievalScope:
     )
 
 
+def _document_resource(document: dict) -> ResourceAttributes:
+    """Build policy input only from persisted server output.
+
+    Phase 4 deliberately treats missing tenant/classification/lifecycle metadata as
+    an authorization failure.  This keeps legacy Phase 3 records inaccessible
+    until the controlled metadata migration has completed.
+    """
+    tenant_id = document.get("tenant_id")
+    classification = document.get("classification")
+    lifecycle_status = document.get("status")
+    metadata = (tenant_id, classification, lifecycle_status)
+    if not all(isinstance(value, str) and value for value in metadata):
+        raise AuthorizationDeniedError()
+    return ResourceAttributes(
+        tenant_id=tenant_id,
+        classification=classification,
+        lifecycle_status=lifecycle_status,
+    )
+
+
+def _require_document_access(action: str, context: RequestContext, document: dict) -> None:
+    """Enforce RBAC plus document attributes without trusting route parameters."""
+    AuthorizationService().require(action, context, _document_resource(document))
+
+
+def _load_authorized_document(
+    document_id: str, action: str, context: RequestContext, include_findings: bool = False
+) -> dict:
+    """Load a record only after action RBAC succeeds, then apply tenant/ABAC checks.
+
+    The route never returns a record before this check.  A cross-tenant caller
+    therefore receives the same generic denial as another forbidden action.
+    """
+    AuthorizationService().require(action, context)
+    document = get_document_service().get_document(document_id, include_findings=include_findings)
+    _require_document_access(action, context, document)
+    return document
+
+
 @app.get("/api/v1/me")
 async def me(
     request: Request, context: RequestContext = Depends(require_request_context)
@@ -179,8 +222,13 @@ async def query(
 
 
 @app.post("/api/v1/documents")
-async def upload_document(request: Request, file: UploadFile = File(...)) -> JSONResponse:
+async def upload_document(
+    request: Request,
+    file: UploadFile = File(...),
+    context: RequestContext = Depends(require_request_context),
+) -> JSONResponse:
     try:
+        AuthorizationService().require("document:upload", context)
         raw_bytes = await file.read(1_000_001)
         result = get_document_service().upload(file.filename or "", file.content_type, raw_bytes)
     except DocumentError as error:
@@ -189,8 +237,13 @@ async def upload_document(request: Request, file: UploadFile = File(...)) -> JSO
 
 
 @app.post("/api/v1/documents/{document_id}/scan")
-async def rescan_document(document_id: str, request: Request) -> JSONResponse:
+async def rescan_document(
+    document_id: str,
+    request: Request,
+    context: RequestContext = Depends(require_request_context),
+) -> JSONResponse:
     try:
+        _load_authorized_document(document_id, "document:scan", context)
         result = get_document_service().rescan(document_id)
     except DocumentError as error:
         return _document_error(error, request, 404 if error.code == "DOCUMENT_NOT_FOUND" else 400)
@@ -198,37 +251,66 @@ async def rescan_document(document_id: str, request: Request) -> JSONResponse:
 
 
 @app.get("/api/v1/documents")
-async def list_documents(request: Request) -> JSONResponse:
+async def list_documents(
+    request: Request, context: RequestContext = Depends(require_request_context)
+) -> JSONResponse:
     try:
+        AuthorizationService().require("document:read", context)
         result = get_document_service().list_documents()
+    except AuthorizationDeniedError:
+        raise
     except Exception:
         return _document_error(DocumentError(), request, 503)
+    # Listing is a metadata API, so filter its visible rows before serialization.
+    # This is separate from RAG retrieval, whose Qdrant filter is built pre-search.
+    visible: list[dict] = []
+    for document in result:
+        try:
+            _require_document_access("document:read", context, document)
+        except AuthorizationDeniedError:
+            continue
+        visible.append(document)
     return JSONResponse(
-        {"success": True, "data": {"documents": result}, "request_id": request.state.request_id}
+        {"success": True, "data": {"documents": visible}, "request_id": request.state.request_id}
     )
 
 
 @app.get("/api/v1/documents/{document_id}")
-async def document_detail(document_id: str, request: Request) -> JSONResponse:
+async def document_detail(
+    document_id: str,
+    request: Request,
+    context: RequestContext = Depends(require_request_context),
+) -> JSONResponse:
     try:
-        result = get_document_service().get_document(document_id)
+        result = _load_authorized_document(document_id, "document:read", context)
     except DocumentError as error:
         return _document_error(error, request, 404 if error.code == "DOCUMENT_NOT_FOUND" else 400)
     return JSONResponse({"success": True, "data": result, "request_id": request.state.request_id})
 
 
 @app.get("/api/v1/documents/{document_id}/security")
-async def document_security(document_id: str, request: Request) -> JSONResponse:
+async def document_security(
+    document_id: str,
+    request: Request,
+    context: RequestContext = Depends(require_request_context),
+) -> JSONResponse:
     try:
-        result = get_document_service().get_document(document_id, include_findings=True)
+        result = _load_authorized_document(
+            document_id, "document:review", context, include_findings=True
+        )
     except DocumentError as error:
         return _document_error(error, request, 404 if error.code == "DOCUMENT_NOT_FOUND" else 400)
     return JSONResponse({"success": True, "data": result, "request_id": request.state.request_id})
 
 
 @app.post("/api/v1/documents/{document_id}/approve")
-async def approve_document(document_id: str, request: Request) -> JSONResponse:
+async def approve_document(
+    document_id: str,
+    request: Request,
+    context: RequestContext = Depends(require_request_context),
+) -> JSONResponse:
     try:
+        _load_authorized_document(document_id, "document:review", context)
         result = get_document_service().approve(document_id)
     except DocumentError as error:
         return _document_error(error, request)
@@ -236,8 +318,13 @@ async def approve_document(document_id: str, request: Request) -> JSONResponse:
 
 
 @app.post("/api/v1/documents/{document_id}/quarantine")
-async def quarantine_document(document_id: str, request: Request) -> JSONResponse:
+async def quarantine_document(
+    document_id: str,
+    request: Request,
+    context: RequestContext = Depends(require_request_context),
+) -> JSONResponse:
     try:
+        _load_authorized_document(document_id, "document:review", context)
         result = get_document_service().quarantine(document_id)
     except DocumentError as error:
         return _document_error(error, request, 404 if error.code == "DOCUMENT_NOT_FOUND" else 400)
@@ -245,8 +332,13 @@ async def quarantine_document(document_id: str, request: Request) -> JSONRespons
 
 
 @app.delete("/api/v1/documents/{document_id}")
-async def delete_document(document_id: str, request: Request) -> JSONResponse:
+async def delete_document(
+    document_id: str,
+    request: Request,
+    context: RequestContext = Depends(require_request_context),
+) -> JSONResponse:
     try:
+        _load_authorized_document(document_id, "document:delete", context)
         result = get_document_service().delete(document_id)
     except DocumentError as error:
         return _document_error(error, request, 404 if error.code == "DOCUMENT_NOT_FOUND" else 400)

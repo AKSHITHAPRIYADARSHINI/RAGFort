@@ -92,7 +92,7 @@ class AuthorizationService:
             classifications = self.allowed_classifications(context)
             if resource.classification not in classifications:
                 return PolicyDecision(False, action, "CLASSIFICATION_DENIED")
-            if resource.lifecycle_status not in {"APPROVED", "INDEXED"}:
+            if not self._lifecycle_allows(action, resource.lifecycle_status):
                 return PolicyDecision(False, action, "LIFECYCLE_DENIED")
         scope = self.retrieval_scope(context) if action == "query" else None
         return PolicyDecision(True, action, "ALLOWED", scope)
@@ -115,3 +115,16 @@ class AuthorizationService:
 
     def retrieval_scope(self, context: RequestContext) -> RetrievalScope:
         return RetrievalScope(context.tenant_id, self.allowed_classifications(context))
+
+    @staticmethod
+    def _lifecycle_allows(action: str, lifecycle_status: str) -> bool:
+        """Keep unsafe versions out of normal reads while allowing authorized review.
+
+        This is a document-management decision only. Retrieval always receives an
+        ``INDEXED`` constraint through :class:`RetrievalScope`; a reviewer seeing a
+        quarantined record never makes that content retrievable.
+        """
+        review_actions = {"document:scan", "document:review", "document:delete"}
+        if action in review_actions:
+            return lifecycle_status not in {"DELETED", "DELETION_PENDING"}
+        return lifecycle_status in {"APPROVED", "INDEXED"}
