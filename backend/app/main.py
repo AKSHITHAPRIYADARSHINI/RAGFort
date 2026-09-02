@@ -2,16 +2,24 @@
 
 from uuid import uuid4
 
-from fastapi import FastAPI, File, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-from backend.app.core.dependencies import get_document_service, get_query_service, get_settings
+from backend.app.auth.dependencies import AuthenticationError, AuthenticationUnavailableError
+from backend.app.auth.models import RequestContext
+from backend.app.auth.policy import AuthorizationDeniedError, AuthorizationService
+from backend.app.core.dependencies import (
+    get_document_service,
+    get_query_service,
+    get_settings,
+    require_request_context,
+)
 from backend.app.documents.models import DocumentError
 from backend.app.rag.embeddings import EmbeddingUnavailableError
 from backend.app.rag.generation import GenerationUnavailableError
-from backend.app.rag.retrieval import RetrievalUnavailableError
+from backend.app.rag.retrieval import RetrievalScope, RetrievalUnavailableError
 
 app = FastAPI(title="RAGFort API", version="0.1.0", docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(
@@ -29,6 +37,7 @@ app.add_middleware(
 
 
 class QueryBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     query: str
 
 
@@ -76,9 +85,68 @@ async def readiness(request: Request) -> JSONResponse:
     )
 
 
+def _auth_error(error: RuntimeError, request: Request) -> JSONResponse:
+    if isinstance(error, AuthenticationUnavailableError):
+        status, code, message = 503, error.code, error.message
+    elif isinstance(error, AuthenticationError):
+        status, code, message = 401, error.code, error.message
+    else:
+        status, code, message = (
+            403,
+            "ACCESS_DENIED",
+            "You do not have permission to access this resource.",
+        )
+    return JSONResponse(
+        status_code=status,
+        content={
+            "success": False,
+            "error": {"code": code, "message": message},
+            "request_id": request.state.request_id,
+        },
+    )
+
+
+@app.exception_handler(AuthenticationError)
+@app.exception_handler(AuthenticationUnavailableError)
+@app.exception_handler(AuthorizationDeniedError)
+async def auth_exception(request: Request, error: RuntimeError) -> JSONResponse:
+    return _auth_error(error, request)
+
+
+def _scope(context: RequestContext) -> RetrievalScope:
+    AuthorizationService().require("query", context)
+    return RetrievalScope(
+        tenant_id=context.tenant_id,
+        user_id=context.user_id,
+        allowed_classifications=tuple(
+            sorted(AuthorizationService().allowed_classifications(context))
+        ),
+        role_ids=tuple(sorted(context.roles)),
+    )
+
+
+@app.get("/api/v1/me")
+async def me(
+    request: Request, context: RequestContext = Depends(require_request_context)
+) -> JSONResponse:
+    return JSONResponse(
+        {
+            "success": True,
+            "data": {
+                "display_name": context.principal.display_name or "RAGFort user",
+                "tenant_id": context.tenant_id,
+                "roles": sorted(context.roles),
+            },
+            "request_id": request.state.request_id,
+        }
+    )
+
+
 @app.post("/api/v1/query")
-async def query(body: QueryBody, request: Request) -> JSONResponse:
-    """Execute Phase 2 baseline RAG over only the controlled development corpus."""
+async def query(
+    body: QueryBody, request: Request, context: RequestContext = Depends(require_request_context)
+) -> JSONResponse:
+    """Authenticate and authorize before embedding, retrieval, context, or generation."""
     question = body.query.strip()
     max_chars = get_settings().rag_query_max_chars
     if not question or len(question) > max_chars:
@@ -91,7 +159,9 @@ async def query(body: QueryBody, request: Request) -> JSONResponse:
             },
         )
     try:
-        outcome = get_query_service().query(question)
+        outcome = get_query_service().query(question, scope=_scope(context))
+    except (AuthenticationError, AuthenticationUnavailableError, AuthorizationDeniedError) as error:
+        return _auth_error(error, request)
     except EmbeddingUnavailableError:
         return _rag_unavailable("RAG_EMBEDDING_UNAVAILABLE", request)
     except RetrievalUnavailableError:
