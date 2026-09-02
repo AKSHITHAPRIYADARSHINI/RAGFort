@@ -166,6 +166,20 @@ class KeycloakAdmin:
                 },
             )
 
+    def configure_local_runtime_actions(self) -> None:
+        """Disable profile-completion actions only in the synthetic local realm.
+
+        These actions make password-grant runtime probes fail before token
+        issuance. They are not disabled in a production identity provider;
+        this seeder is explicitly limited to the local development realm.
+        """
+        for alias in ("UPDATE_PROFILE", "VERIFY_PROFILE", "VERIFY_EMAIL"):
+            self._admin_request(
+                "PUT",
+                f"/realms/{REALM}/authentication/required-actions/{alias}",
+                {"alias": alias, "enabled": False, "defaultAction": False},
+            )
+
     def ensure_role(self, role_name: str) -> dict:
         path = f"/realms/{REALM}/roles/{role_name}"
         role = self._admin_request("GET", path, allow_not_found=True)
@@ -381,6 +395,7 @@ def main() -> None:
     )
     password = _required("RAGFORT_DEV_USER_PASSWORD")
     admin.ensure_realm()
+    admin.configure_local_runtime_actions()
     admin.ensure_clients()
     subjects = {
         identity.key: admin.ensure_user(identity, password) for identity in SYNTHETIC_IDENTITIES
