@@ -6,6 +6,10 @@ RAGFort is a planned zero-trust security platform for Retrieval-Augmented Genera
 
 **Phase 1 — architecture and engineering foundation.** The repository contains a health-only FastAPI service, validation scaffolding, and version-controlled security architecture. It does not contain a RAG pipeline, authentication implementation, document ingestion, vector search, an LLM integration, or security detections yet.
 
+## Phase 3 status
+
+Phase 3 delivers a development secure-ingestion boundary for UTF-8 TXT and Markdown: bounded validation, deterministic scan findings, SHA-256 provenance, review/quarantine, explicit development approval, approved-only indexing, and derived-index deletion. Identity, tenant enforcement, RBAC/ABAC, broad attack detection, output DLP, and production hardening remain future work. See `docs/phase-3-implementation-report.md` for evidence and limitations.
+
 ## Local validation
 
 ```powershell

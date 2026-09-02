@@ -16,3 +16,7 @@ No pass-rate is claimed beyond the two Phase 1 health-contract tests. Future tes
 Adversarial coverage plans normal queries; direct override/system-prompt extraction; Unicode/encoded/multiturn injection; indirect/split-chunk injection; poisoning; unauthorized and cross-tenant retrieval; stale permissions/cache leakage; PII/secret exposure; corpus extraction; tampering; retrieval manipulation; malformed metadata; rate abuse; and each critical dependency failure.
 
 Phase gates require every delivered invariant to have unit and integration evidence, event schema/privacy assertions, and negative tests proving that no LLM call occurs after an authorization/injection block where applicable.
+
+## Phase 3 delivered coverage
+
+Synthetic tests cover valid upload/review/approve/index, high-confidence indirect-instruction and hidden-Unicode quarantine, path-like filename handling, extension/content mismatch, unsupported type, duplicate SHA-256 idempotency, integrity mismatch, vector deletion, safe API envelopes, and the existing Phase 2 query regression. Live Compose evidence covers safe upload -> approval -> retrieval citation, malicious upload -> quarantine/no malicious source, sensitive upload -> review finding, and approved upload -> deletion/vector removal. Scanner effectiveness is limited to the documented deterministic patterns.

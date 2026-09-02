@@ -16,5 +16,14 @@ These are non-negotiable future implementation properties. A feature that violat
 | INV-010 | Deleted information is removed from source, indexes, and caches under a deletion workflow. | Tombstone, purge jobs, and purge evidence. |
 | INV-011 | Tenant and authorization context are server-derived, never client authority. | Validated identity claims and canonical server lookup. |
 | INV-012 | Retrieved context is data, never executable instruction. | Fixed system policy, structural delimiters, provenance, and context firewall. |
+| INV-3-001 | Unapproved documents never enter the active vector index. | `DocumentService.approve` is the only indexing path. |
+| INV-3-002 | Quarantined and rejected documents never participate in retrieval. | No upsert before approval; quarantine deletes derived vectors. |
+| INV-3-004 | Integrity-failed documents cannot remain active. | Original/content SHA-256 mismatch quarantines before approval. |
+| INV-3-005 | Client metadata cannot override server-owned lifecycle state or classification. | Server derives and persists security fields. |
+| INV-3-006 | Unsupported file types cannot enter ingestion. | Extension plus byte/signature allowlist. |
+| INV-3-007 | Parser failure cannot result in indexing. | Extraction error returns a safe failure before persistence/indexing. |
+| INV-3-009 | Document deletion propagates to active retrieval. | Vector removal precedes terminal `DELETED`. |
+| INV-3-010 | Security findings are not logged raw. | APIs retain safe finding metadata only. |
+| INV-3-012 | Indexing failure does not create an INDEXED state. | Index error persists `INDEX_FAILED`. |
 
 Deterministic enforcement (identity, tenant validation, RBAC/ABAC, approvals, integrity, quotas, cache scoping, output release) must not depend on an LLM or classifier. Detection may add risk signals or invoke a policy-configured block, but may not grant access or override a deterministic denial.

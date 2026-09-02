@@ -13,3 +13,13 @@ Phase 1 architecture was independently reviewed before implementation. The initi
 | DevSecOps Engineer | PASS | Secrets, non-root container, repeatable validation, and CI baseline are required. | `.env` policy, Docker/Compose, CI lint/test/audit baseline added. |
 
 No architectural disagreement remained after consolidation. The shared decisions are recorded in `docs/decisions/`; unimplemented controls remain assigned to their designated phases.
+
+## Phase 3 specialist consolidation
+
+| Review role | Result | Adopted decision |
+|---|---|---|
+| Security Architect / AI-RAG Security | PASS | Preserve Qdrant as a derived index; upload, bytes, metadata, and content remain untrusted until approval. |
+| Secure Ingestion / Backend | PASS | Use narrow formats, dual SHA-256, durable document/version state, explicit transitions, and fail-closed index state. |
+| Frontend / Security Test / DevSecOps | PASS | Centralize browser API calls, show only safe finding summaries, test negative paths, and use internal PostgreSQL plus loopback Qdrant development exposure. |
+
+There was no Phase 1 or Phase 2 architectural defect. The development-only approval action is explicitly temporary and must be replaced by Phase 4 identity and policy enforcement.

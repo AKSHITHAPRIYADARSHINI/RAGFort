@@ -25,4 +25,8 @@ Future entities: `tenants`, `users`, `roles`, `permissions`, `user_roles`, polic
 
 Every tenant-owned row includes `tenant_id`; later PostgreSQL RLS supplements (never replaces) server-side predicate enforcement. Documents are versioned, hash-bound, classified, provenance-bound, and stateful. Deletion is a tombstone-and-purge workflow that records completion for object source, relational data, vectors, and caches.
 
+## Phase 3 implemented development schema
+
+`documents` is the authoritative logical document record: ID, safe display name, controlled classification, current version, lifecycle status, and timestamps. `document_versions` stores immutable version ID/number, detected type, byte count, original SHA-256, normalized-content SHA-256, original bytes, normalized text, minimized findings JSON, and derived index state. SQLAlchemy creates this narrow schema for the development Compose PostgreSQL service and disposable test SQLite stores. Qdrant receives only derived chunk payloads after approval; it is not a lifecycle authority. Formal migration management and tenant fields remain a production hardening/Phase 4 prerequisite.
+
 Security events are append-oriented with `event_id`, `request_id`, `correlation_id`, UTC timestamp, schema version, stage, category, severity, risk score, action, pseudonymous tenant/actor references, policy/version, detector signals, retrieval/LLM/exposure booleans, outcome, and latency. Raw prompts, documents, outputs, secrets, and PII are excluded by default; protected evidence is a separate access-controlled reference.

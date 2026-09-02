@@ -27,3 +27,18 @@ Mutations will require an idempotency key when replay could create a new action.
 ## Planned contracts
 
 `QueryRequest` intentionally excludes a client-supplied `tenant_id`; a trusted `RequestContext` supplies tenant, user, roles, authorization epoch, and policy version. `QueryAssessment` returns decision, risk, signal references, and a normalized-query reference. `RetrievalBundle` contains only authorized, approved, integrity-valid chunks with immutable document/version/chunk IDs, classification, hash, and trace. `ContextPackage` has structural source delimiters and provenance. `OutputAssessment` returns allow/redact/block and evidence references. These interfaces are Phase 2+ contracts, not endpoints implemented today.
+
+## Phase 3 document endpoints
+
+All endpoints use the standard envelope and server-created request ID. Phase 3 uses a clearly labelled development-only operator action; it does not claim identity, RBAC, ABAC, or tenant authorization.
+
+| UI | Endpoint | Method | Behavior |
+|---|---|---|---|
+| Documents | `/api/v1/documents` | GET | Safe lifecycle summaries only. |
+| Upload | `/api/v1/documents` | POST multipart | Validates, extracts, scans, hashes, and returns REVIEW_REQUIRED or QUARANTINED. |
+| Detail | `/api/v1/documents/{id}` | GET | Safe metadata; never body/paths/raw hashes. |
+| Security | `/api/v1/documents/{id}/security` | GET | Safe finding categories and descriptions. |
+| Rescan | `/api/v1/documents/{id}/scan` | POST | Revalidates stored immutable version. |
+| Approve | `/api/v1/documents/{id}/approve` | POST | Development-only explicit transition and gated index attempt. |
+| Quarantine | `/api/v1/documents/{id}/quarantine` | POST | Excludes/removes derived vectors. |
+| Delete | `/api/v1/documents/{id}` | DELETE | Marks deletion pending and removes derived vectors. |

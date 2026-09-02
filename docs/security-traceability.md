@@ -16,5 +16,8 @@ This matrix creates the implementation and evidence chain from threat to invaria
 | T10 Unsafe logging | INV-008 | Minimized event schema and protected evidence | 5, 6 | `EVENT-PRIVACY-001` |
 | T11 Data-service bypass | INV-011 | API-only privileged access; private service networking | 8 | `DEPLOY-BOUNDARY-001` |
 | T12 Supply-chain compromise | INV-005, INV-008 | Dependency audit, later lock/provenance/SBOM | 1, 8 | `CI-DEPS-001` |
+| T02 Indirect injection | INV-3-001, INV-3-002 | Document normalization, deterministic scan, quarantine, approval gate | 3 | `test_suspicious_and_hidden_unicode_documents_are_quarantined_and_not_indexed` |
+| T05 Tampering | INV-003, INV-3-004 | Original/content SHA-256 recheck before approval | 3 | `test_integrity_mismatch_quarantines_before_indexing` |
+| T09 Control failure | INV-005, INV-3-012 | Index failure state; no false INDEXED result | 3 | Live Compose Qdrant outage evidence |
 
 The intended lifecycle is: **threat → requirement → control → phase → test → measured evidence**. The traceability matrix is updated whenever a control or test is delivered.
