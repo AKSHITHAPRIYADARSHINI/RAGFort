@@ -16,7 +16,12 @@ from backend.app.rag.retrieval import RetrievalUnavailableError
 app = FastAPI(title="RAGFort API", version="0.1.0", docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ],
     allow_credentials=False,
     allow_methods=["POST", "GET", "DELETE"],
     allow_headers=["Content-Type"],

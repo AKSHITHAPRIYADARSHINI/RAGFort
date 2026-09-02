@@ -44,7 +44,7 @@ class FileTooLargeError(DocumentError):
 
 class UnsupportedMediaError(DocumentError):
     code = "UNSUPPORTED_MEDIA_TYPE"
-    message = "Only PDF, TXT, and Markdown documents are supported."
+    message = "Only TXT and Markdown documents are supported."
 
 
 class DocumentNotFoundError(DocumentError):

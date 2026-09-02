@@ -1,5 +1,4 @@
 import hashlib
-import io
 import json
 import re
 import unicodedata
@@ -7,7 +6,6 @@ from datetime import datetime
 from pathlib import PurePath
 from uuid import uuid4
 
-from pypdf import PdfReader
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -30,7 +28,7 @@ from backend.app.rag.retrieval import QdrantRetriever, RetrievalUnavailableError
 
 MAX_UPLOAD_BYTES = 1_000_000
 MAX_EXTRACTED_CHARS = 200_000
-_ALLOWED = {".txt": "text/plain", ".md": "text/markdown", ".pdf": "application/pdf"}
+_ALLOWED = {".txt": "text/plain", ".md": "text/markdown"}
 
 
 def _safe_name(filename: str) -> str:
@@ -45,23 +43,14 @@ def _detected_type(name: str, data: bytes) -> str:
     expected = _ALLOWED.get(extension)
     if expected is None:
         raise UnsupportedMediaError()
-    if expected == "application/pdf":
-        if not data.startswith(b"%PDF-"):
-            raise FileValidationError()
-    elif data.startswith(b"%PDF-") or b"\x00" in data[:4096]:
+    if data.startswith(b"%PDF-") or b"\x00" in data[:4096]:
         raise FileValidationError()
     return expected
 
 
 def _extract(name: str, detected_type: str, data: bytes) -> str:
     try:
-        if detected_type == "application/pdf":
-            reader = PdfReader(io.BytesIO(data), strict=True)
-            if reader.is_encrypted:
-                raise FileValidationError()
-            text = "\n".join(page.extract_text() or "" for page in reader.pages)
-        else:
-            text = data.decode("utf-8")
+        text = data.decode("utf-8")
     except FileValidationError:
         raise
     except Exception as error:

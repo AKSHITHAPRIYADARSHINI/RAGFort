@@ -5,7 +5,6 @@ import pytest
 from backend.app.documents.ingestion import DocumentService
 from backend.app.documents.models import (
     DocumentStatus,
-    FileValidationError,
     UnsupportedMediaError,
 )
 from backend.app.documents.persistence import DocumentVersionRecord, make_session_factory
@@ -75,7 +74,7 @@ def test_suspicious_and_hidden_unicode_documents_are_quarantined_and_not_indexed
 def test_extension_and_content_must_agree_and_path_does_not_be_used(tmp_path: Path) -> None:
     service, _, _ = build_service(tmp_path)
 
-    with pytest.raises(FileValidationError):
+    with pytest.raises(UnsupportedMediaError):
         service.upload("../../untrusted.pdf", "application/pdf", b"plain text")
     with pytest.raises(UnsupportedMediaError):
         service.upload("payload.exe", "application/pdf", b"MZ...")
@@ -94,6 +93,19 @@ def test_duplicate_hash_is_idempotent_and_delete_removes_derived_index(tmp_path:
     assert deleted["status"] == DocumentStatus.DELETED
     assert not index.chunks
     assert index.deleted_filters
+
+
+def test_new_content_under_the_same_name_creates_a_new_unapproved_version(tmp_path: Path) -> None:
+    service, _, index = build_service(tmp_path)
+    first = service.upload("versioned.txt", "text/plain", b"Version one has original content.")
+    service.approve(first["document_id"])
+    second = service.upload("versioned.txt", "text/plain", b"Version two has changed content.")
+
+    assert second["document_id"] == first["document_id"]
+    assert second["version"] == 2
+    assert second["status"] == DocumentStatus.REVIEW_REQUIRED
+    assert second["index_state"] == "NOT_INDEXED"
+    assert len(index.chunks) == 1
 
 
 def test_integrity_mismatch_quarantines_before_indexing(tmp_path: Path) -> None:
