@@ -35,7 +35,9 @@ def test_application_identity_seed_is_repeatable_and_persists_no_credentials(tmp
 
     factory = make_session_factory(database_url)
     with factory() as session:
-        assert session.scalar(select(func.count()).select_from(UserRecord)) == len(SYNTHETIC_IDENTITIES)
+        assert session.scalar(select(func.count()).select_from(UserRecord)) == len(
+            SYNTHETIC_IDENTITIES
+        )
         assert session.scalar(select(func.count()).select_from(TenantMembershipRecord)) == len(
             SYNTHETIC_IDENTITIES
         )
