@@ -35,5 +35,12 @@ export async function readSession(): Promise<SessionState> {
 /** Login is an IdP-owned redirect, never a browser-managed token substitute. */
 export function loginUrl(): string | null {
   const configured = process.env.NEXT_PUBLIC_OIDC_LOGIN_URL;
-  return configured && configured.startsWith("http") ? configured : null;
+  if (configured && configured.startsWith("http")) return configured;
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+  return `${apiBaseUrl}/api/v1/auth/login`;
+}
+
+export async function signOut(): Promise<void> {
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+  await fetch(`${apiBaseUrl}/api/v1/auth/logout`, { method: "POST", credentials: "include" });
 }

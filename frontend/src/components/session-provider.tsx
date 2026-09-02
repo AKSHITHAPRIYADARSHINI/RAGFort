@@ -1,16 +1,17 @@
 "use client";
 
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
-import { loginUrl, readSession, SessionState } from "../api/auth";
+import { loginUrl, readSession, SessionState, signOut } from "../api/auth";
 
-type SessionContextValue = { state: SessionState; refresh: () => Promise<void>; signInUrl: string | null };
+type SessionContextValue = { state: SessionState; refresh: () => Promise<void>; signOut: () => Promise<void>; signInUrl: string | null };
 const SessionContext = createContext<SessionContextValue | undefined>(undefined);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<SessionState>({ status: "loading" });
   const refresh = async () => setState(await readSession());
+  const logout = async () => { await signOut(); setState({ status: "unauthenticated" }); };
   useEffect(() => { void refresh(); }, []);
-  const value = useMemo(() => ({ state, refresh, signInUrl: loginUrl() }), [state]);
+  const value = useMemo(() => ({ state, refresh, signOut: logout, signInUrl: loginUrl() }), [state]);
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 
