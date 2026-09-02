@@ -1,0 +1,72 @@
+[
+  {
+    "document_id": "doc_acme_marker",
+    "title": "ACME Internal Reference",
+    "source": "phase4-fixture",
+    "version": "1",
+    "section": "Tenant Verification",
+    "content": "ACME tenant verification marker FALCON-AMBER-731 is available to ACME employees.",
+    "access": {
+      "tenant_id": "tenant_acme",
+      "classification": "INTERNAL",
+      "allowed_role_ids": ["viewer", "contributor", "reviewer", "admin"],
+      "allowed_user_ids": []
+    }
+  },
+  {
+    "document_id": "doc_globex_marker",
+    "title": "GLOBEX Internal Reference",
+    "source": "phase4-fixture",
+    "version": "1",
+    "section": "Tenant Verification",
+    "content": "GLOBEX tenant verification marker COBALT-RIVER-942 is available only to GLOBEX employees.",
+    "access": {
+      "tenant_id": "tenant_globex",
+      "classification": "INTERNAL",
+      "allowed_role_ids": ["viewer", "contributor", "reviewer", "admin"],
+      "allowed_user_ids": []
+    }
+  },
+  {
+    "document_id": "doc_acme_finance",
+    "title": "ACME Finance Reference",
+    "source": "phase4-fixture",
+    "version": "1",
+    "section": "Finance",
+    "content": "ACME Finance marker FINANCE-ORCHID-815 is restricted to approved Finance readers.",
+    "access": {
+      "tenant_id": "tenant_acme",
+      "classification": "CONFIDENTIAL",
+      "allowed_role_ids": ["finance_reader"],
+      "allowed_user_ids": []
+    }
+  },
+  {
+    "document_id": "doc_acme_hr",
+    "title": "ACME Human Resources Reference",
+    "source": "phase4-fixture",
+    "version": "1",
+    "section": "Human Resources",
+    "content": "ACME Human Resources marker HR-SILVER-428 is restricted to approved HR readers.",
+    "access": {
+      "tenant_id": "tenant_acme",
+      "classification": "CONFIDENTIAL",
+      "allowed_role_ids": ["hr_reader"],
+      "allowed_user_ids": []
+    }
+  },
+  {
+    "document_id": "doc_acme_restricted",
+    "title": "ACME Restricted Reference",
+    "source": "phase4-fixture",
+    "version": "1",
+    "section": "Restricted",
+    "content": "ACME restricted marker RESTRICTED-CEDAR-619 requires restricted-reader authorization.",
+    "access": {
+      "tenant_id": "tenant_acme",
+      "classification": "RESTRICTED",
+      "allowed_role_ids": ["restricted_reader"],
+      "allowed_user_ids": []
+    }
+  }
+]

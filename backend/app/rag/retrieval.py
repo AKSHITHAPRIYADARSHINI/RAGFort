@@ -7,6 +7,19 @@ from qdrant_client import QdrantClient, models
 
 from backend.app.rag.models import DocumentChunk, RetrievalResult
 
+PHASE4_SECURITY_METADATA_VERSION = "phase4-v1"
+REQUIRED_PHASE4_PAYLOAD_FIELDS = frozenset(
+    {
+        "tenant_id",
+        "classification",
+        "approval_status",
+        "index_state",
+        "document_status",
+        "current_version",
+        "security_metadata_version",
+    }
+)
+
 
 class RetrievalUnavailableError(RuntimeError):
     pass
@@ -63,10 +76,10 @@ class QdrantRetriever:
         are repeated on returned payloads because Qdrant is a derived index,
         not the authorization authority.
         """
+        # At least one explicit, server-owned ACL must match.  Tenant equality
+        # alone is deliberately insufficient: a point without an ACL is a
+        # legacy/incomplete point and therefore cannot become queryable.
         audience_conditions: list[models.FieldCondition] = [
-            models.FieldCondition(
-                key="visibility", match=models.MatchValue(value="tenant")
-            ),
             models.FieldCondition(
                 key="allowed_user_ids", match=models.MatchValue(value=scope.user_id)
             ),
@@ -89,7 +102,14 @@ class QdrantRetriever:
                     key="index_state", match=models.MatchValue(value="INDEXED")
                 ),
                 models.FieldCondition(
+                    key="document_status", match=models.MatchValue(value="INDEXED")
+                ),
+                models.FieldCondition(
                     key="current_version", match=models.MatchValue(value=True)
+                ),
+                models.FieldCondition(
+                    key="security_metadata_version",
+                    match=models.MatchValue(value=PHASE4_SECURITY_METADATA_VERSION),
                 ),
                 models.FieldCondition(
                     key="classification",
@@ -102,16 +122,18 @@ class QdrantRetriever:
     @staticmethod
     def _matches_scope(payload: Mapping[str, Any], scope: RetrievalScope) -> bool:
         """Fail closed for legacy, incomplete, or inconsistent index payloads."""
+        if not REQUIRED_PHASE4_PAYLOAD_FIELDS.issubset(payload):
+            return False
         if (
             payload.get("tenant_id") != scope.tenant_id
             or payload.get("approval_status") != "approved"
             or payload.get("index_state") != "INDEXED"
+            or payload.get("document_status") != "INDEXED"
             or payload.get("current_version") is not True
+            or payload.get("security_metadata_version") != PHASE4_SECURITY_METADATA_VERSION
             or payload.get("classification") not in scope.allowed_classifications
         ):
             return False
-        if payload.get("visibility") == "tenant":
-            return True
         allowed_users = payload.get("allowed_user_ids", [])
         if isinstance(allowed_users, list) and scope.user_id in allowed_users:
             return True
