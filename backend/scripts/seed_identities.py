@@ -278,7 +278,6 @@ class KeycloakAdmin:
                 f"/realms/{REALM}/users?{urlencode({'username': identity.key, 'exact': 'true'})}",
             )
         user_id = str(users[0]["id"])
-        self._admin_request("PUT", f"/realms/{REALM}/users/{user_id}", data)
         self._admin_request(
             "PUT",
             f"/realms/{REALM}/users/{user_id}/reset-password",
@@ -287,6 +286,9 @@ class KeycloakAdmin:
             # to obtain a token; browser login remains authorization-code-only.
             {"type": "password", "temporary": False, "value": password},
         )
+        # Resetting credentials may reinstate a required action in some
+        # Keycloak versions, so clear the local-only user profile afterwards.
+        self._admin_request("PUT", f"/realms/{REALM}/users/{user_id}", data)
         desired_roles = [self.ensure_role(role) for role in identity.role_names]
         self._admin_request(
             "POST", f"/realms/{REALM}/users/{user_id}/role-mappings/realm", desired_roles
