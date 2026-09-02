@@ -82,7 +82,7 @@ def _upgrade_phase4_document_access_columns(engine) -> None:
             "allowed_role_ids_json": "TEXT DEFAULT '[]'",
             "department": "VARCHAR(128)",
             "authorization_metadata_version": "INTEGER DEFAULT 0",
-            "current_version": "BOOLEAN DEFAULT 1",
+            "current_version": "BOOLEAN DEFAULT TRUE",
         },
     }
     inspector = inspect(engine)
