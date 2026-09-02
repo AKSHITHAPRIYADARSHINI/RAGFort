@@ -194,10 +194,6 @@ class KeycloakAdmin:
         )
         if not clients:
             self._admin_request("POST", f"/realms/{REALM}/clients", payload)
-            return
-        # Keep the local realm declarative and idempotent when its configuration
-        # changes between development runs.
-        self._admin_request("PUT", f"/realms/{REALM}/clients/{clients[0]['id']}", payload)
 
     def ensure_clients(self) -> None:
         self.ensure_client(
