@@ -6,7 +6,7 @@ from backend.app.rag.context import ContextBuilder
 from backend.app.rag.embeddings import EmbeddingService, EmbeddingUnavailableError
 from backend.app.rag.generation import GenerationService, GenerationUnavailableError
 from backend.app.rag.models import QueryOutcome
-from backend.app.rag.retrieval import Retriever
+from backend.app.rag.retrieval import RetrievalScope, Retriever
 
 
 class QueryService:
@@ -30,7 +30,13 @@ class QueryService:
         self.min_score = min_score
         self.dev_trace = dev_trace
 
-    def query(self, question: str) -> QueryOutcome:
+    def query(self, question: str, scope: RetrievalScope | None = None) -> QueryOutcome:
+        """Execute retrieval using an optional trusted policy scope.
+
+        Phase 4 API wiring will require ``scope`` for every protected query.
+        It remains optional temporarily to preserve the isolated Phase 2
+        development corpus contract while identity integration is introduced.
+        """
         trace: dict[str, object] = {}
         try:
             started = time.perf_counter()
@@ -39,7 +45,7 @@ class QueryService:
         except Exception as error:
             raise EmbeddingUnavailableError("Embedding service is unavailable.") from error
         started = time.perf_counter()
-        results = self.retriever.search(vector, self.top_k, filters=None)
+        results = self.retriever.search(vector, self.top_k, scope=scope)
         trace["retrieval_duration_ms"] = round((time.perf_counter() - started) * 1000, 2)
         stop_words = {"a", "an", "are", "can", "company", "how", "is", "of", "the", "what"}
         evidence_terms = set(re.findall(r"[a-z0-9]+", question.lower())) - stop_words

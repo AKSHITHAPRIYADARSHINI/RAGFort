@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any, Protocol
 from uuid import NAMESPACE_URL, uuid5
 
@@ -11,9 +12,28 @@ class RetrievalUnavailableError(RuntimeError):
     pass
 
 
+@dataclass(frozen=True)
+class RetrievalScope:
+    """A policy-owned scope for a single retrieval decision.
+
+    This contract deliberately contains only values derived by a trusted policy
+    service. It is not an HTTP request model and must never be populated from
+    client-supplied tenant, role, or classification values.
+    """
+
+    tenant_id: str
+    user_id: str
+    allowed_classifications: tuple[str, ...]
+    role_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.tenant_id or not self.user_id or not self.allowed_classifications:
+            raise ValueError("A retrieval scope requires tenant, user, and classification values.")
+
+
 class Retriever(Protocol):
     def search(
-        self, query_vector: list[float], top_k: int, filters: Mapping[str, Any] | None = None
+        self, query_vector: list[float], top_k: int, scope: RetrievalScope | None = None
     ) -> list[RetrievalResult]: ...
 
 
@@ -25,7 +45,7 @@ class QdrantRetriever:
         self.collection = collection
 
     @staticmethod
-    def _filter(filters: Mapping[str, Any] | None) -> models.Filter | None:
+    def _equality_filter(filters: Mapping[str, Any] | None) -> models.Filter | None:
         if not filters:
             return None
         return models.Filter(
@@ -35,15 +55,81 @@ class QdrantRetriever:
             ]
         )
 
+    @staticmethod
+    def _scope_filter(scope: RetrievalScope) -> models.Filter:
+        """Build the mandatory Phase 4 pre-retrieval filter.
+
+        Qdrant only receives a scope produced on the server. The same checks
+        are repeated on returned payloads because Qdrant is a derived index,
+        not the authorization authority.
+        """
+        audience_conditions: list[models.FieldCondition] = [
+            models.FieldCondition(
+                key="visibility", match=models.MatchValue(value="tenant")
+            ),
+            models.FieldCondition(
+                key="allowed_user_ids", match=models.MatchValue(value=scope.user_id)
+            ),
+        ]
+        if scope.role_ids:
+            audience_conditions.append(
+                models.FieldCondition(
+                    key="allowed_role_ids", match=models.MatchAny(any=list(scope.role_ids))
+                )
+            )
+        return models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="tenant_id", match=models.MatchValue(value=scope.tenant_id)
+                ),
+                models.FieldCondition(
+                    key="approval_status", match=models.MatchValue(value="approved")
+                ),
+                models.FieldCondition(
+                    key="index_state", match=models.MatchValue(value="INDEXED")
+                ),
+                models.FieldCondition(
+                    key="current_version", match=models.MatchValue(value=True)
+                ),
+                models.FieldCondition(
+                    key="classification",
+                    match=models.MatchAny(any=list(scope.allowed_classifications)),
+                ),
+            ],
+            min_should=models.MinShould(conditions=audience_conditions, min_count=1),
+        )
+
+    @staticmethod
+    def _matches_scope(payload: Mapping[str, Any], scope: RetrievalScope) -> bool:
+        """Fail closed for legacy, incomplete, or inconsistent index payloads."""
+        if (
+            payload.get("tenant_id") != scope.tenant_id
+            or payload.get("approval_status") != "approved"
+            or payload.get("index_state") != "INDEXED"
+            or payload.get("current_version") is not True
+            or payload.get("classification") not in scope.allowed_classifications
+        ):
+            return False
+        if payload.get("visibility") == "tenant":
+            return True
+        allowed_users = payload.get("allowed_user_ids", [])
+        if isinstance(allowed_users, list) and scope.user_id in allowed_users:
+            return True
+        allowed_roles = payload.get("allowed_role_ids", [])
+        return (
+            isinstance(allowed_roles, list)
+            and bool(set(scope.role_ids).intersection(str(role) for role in allowed_roles))
+        )
+
     def search(
-        self, query_vector: list[float], top_k: int, filters: Mapping[str, Any] | None = None
+        self, query_vector: list[float], top_k: int, scope: RetrievalScope | None = None
     ) -> list[RetrievalResult]:
         try:
             response = self.client.query_points(
                 collection_name=self.collection,
                 query=query_vector,
                 limit=top_k,
-                query_filter=self._filter(filters),
+                query_filter=self._scope_filter(scope) if scope is not None else None,
                 with_payload=True,
             )
         except Exception as error:  # backend boundary maps provider exceptions safely
@@ -53,6 +139,8 @@ class QdrantRetriever:
             payload = point.payload or {}
             required = {"chunk_id", "document_id", "text", "title", "source"}
             if not required.issubset(payload):
+                continue
+            if scope is not None and not self._matches_scope(payload, scope):
                 continue
             metadata = {
                 key: value
@@ -94,7 +182,7 @@ class QdrantRetriever:
         try:
             self.client.delete(
                 collection_name=self.collection,
-                points_selector=models.FilterSelector(filter=self._filter(filters)),
+                points_selector=models.FilterSelector(filter=self._equality_filter(filters)),
                 wait=True,
             )
         except Exception as error:
