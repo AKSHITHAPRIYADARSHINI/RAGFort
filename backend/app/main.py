@@ -1,10 +1,16 @@
-"""Phase 1 health-only API; security-sensitive endpoints are intentionally not implemented."""
+"""RAGFort Phase 4 API: authenticated, pre-filtered RAG retrieval."""
 
+import base64
+import hashlib
+from secrets import token_urlsafe
+from urllib.parse import urlencode
+from urllib.request import Request as UrlRequest
+from urllib.request import urlopen
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, Request, UploadFile
+from fastapi import Cookie, Depends, FastAPI, File, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict
 
 from backend.app.auth.dependencies import AuthenticationError, AuthenticationUnavailableError
@@ -14,6 +20,7 @@ from backend.app.auth.policy import (
     AuthorizationService,
     ResourceAttributes,
 )
+from backend.app.auth.session import local_oidc_sessions
 from backend.app.core.dependencies import (
     get_document_service,
     get_query_service,
@@ -34,10 +41,92 @@ app.add_middleware(
         "http://localhost:3001",
         "http://127.0.0.1:3001",
     ],
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["POST", "GET", "DELETE"],
     allow_headers=["Content-Type"],
 )
+
+
+def _pkce_challenge(verifier: str) -> str:
+    return (
+        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+    )
+
+
+@app.get("/api/v1/auth/login")
+async def login() -> RedirectResponse:
+    settings = get_settings()
+    if not all((settings.oidc_authorization_url, settings.oidc_redirect_uri)):
+        raise AuthenticationUnavailableError()
+    verifier = token_urlsafe(48)
+    state = local_oidc_sessions.begin(verifier)
+    parameters = {
+        "client_id": settings.oidc_client_id,
+        "redirect_uri": settings.oidc_redirect_uri,
+        "response_type": "code",
+        "scope": "openid",
+        "state": state,
+        "code_challenge": _pkce_challenge(verifier),
+        "code_challenge_method": "S256",
+    }
+    return RedirectResponse(
+        f"{settings.oidc_authorization_url}?{urlencode(parameters)}", status_code=302
+    )
+
+
+@app.get("/api/v1/auth/callback")
+async def oidc_callback(code: str, state: str) -> RedirectResponse:
+    settings = get_settings()
+    pending = local_oidc_sessions.consume(state)
+    if pending is None or not settings.oidc_token_url:
+        raise AuthenticationError()
+    body = urlencode(
+        {
+            "grant_type": "authorization_code",
+            "client_id": settings.oidc_client_id,
+            "code": code,
+            "redirect_uri": settings.oidc_redirect_uri,
+            "code_verifier": pending.verifier,
+        }
+    ).encode()
+    try:
+        with urlopen(
+            UrlRequest(
+                settings.oidc_token_url,
+                data=body,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            ),
+            timeout=10,
+        ) as response:  # noqa: S310
+            import json
+
+            token_data = json.loads(response.read().decode())
+    except Exception as error:
+        raise AuthenticationError() from error
+    token = token_data.get("access_token")
+    expires_in = token_data.get("expires_in")
+    if not isinstance(token, str) or not isinstance(expires_in, int):
+        raise AuthenticationError()
+    session_id = local_oidc_sessions.create(token, expires_in)
+    response = RedirectResponse(settings.frontend_url, status_code=302)
+    response.set_cookie(
+        "ragfort_session",
+        session_id,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=expires_in,
+        path="/",
+    )
+    return response
+
+
+@app.post("/api/v1/auth/logout")
+async def logout(ragfort_session: str | None = Cookie(default=None)) -> JSONResponse:
+    local_oidc_sessions.revoke(ragfort_session)
+    response = JSONResponse({"success": True, "data": {"signed_out": True}})
+    response.delete_cookie("ragfort_session", path="/")
+    return response
 
 
 class QueryBody(BaseModel):

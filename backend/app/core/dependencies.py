@@ -1,11 +1,12 @@
 from functools import lru_cache
 
-from fastapi import Header
+from fastapi import Cookie, Header
 from qdrant_client import QdrantClient
 
 from backend.app.auth.dependencies import build_request_context_dependency, extract_bearer_token
 from backend.app.auth.oidc import OidcConfiguration, PyJwtOidcValidator
 from backend.app.auth.resolver import SqlAlchemyRequestContextResolver
+from backend.app.auth.session import local_oidc_sessions
 from backend.app.core.config import Settings
 from backend.app.documents.ingestion import DocumentService
 from backend.app.documents.persistence import make_session_factory
@@ -72,8 +73,17 @@ def get_request_context_dependency():
     )
 
 
-def require_request_context(authorization: str | None = Header(default=None)):
+def require_request_context(
+    authorization: str | None = Header(default=None),
+    ragfort_session: str | None = Cookie(default=None),
+):
     """Late-bound dependency so unset local OIDC config fails safely per request."""
     # Check the caller supplied a credential before touching provider configuration.
-    extract_bearer_token(authorization)
-    return get_request_context_dependency()(authorization)
+    token = (
+        extract_bearer_token(authorization)
+        if authorization
+        else local_oidc_sessions.token(ragfort_session)
+    )
+    if token is None:
+        extract_bearer_token(None)
+    return get_request_context_dependency()(f"Bearer {token}")

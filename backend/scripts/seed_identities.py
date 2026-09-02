@@ -221,7 +221,11 @@ class KeycloakAdmin:
                 "publicClient": True,
                 "standardFlowEnabled": True,
                 "directAccessGrantsEnabled": False,
-                "redirectUris": ["http://localhost:3000/*", "http://127.0.0.1:3000/*"],
+                "redirectUris": [
+                    "http://localhost:3000/*",
+                    "http://127.0.0.1:3000/*",
+                    "http://localhost:8000/api/v1/auth/callback",
+                ],
                 "webOrigins": ["http://localhost:3000", "http://127.0.0.1:3000"],
                 "protocol": "openid-connect",
             },

@@ -25,3 +25,8 @@ class Settings:
     oidc_authorization_epoch_claim: str = os.getenv(
         "OIDC_AUTHORIZATION_EPOCH_CLAIM", "authorization_epoch"
     )
+    oidc_client_id: str = os.getenv("OIDC_CLIENT_ID", "ragfort-frontend")
+    oidc_authorization_url: str = os.getenv("OIDC_AUTHORIZATION_URL", "")
+    oidc_token_url: str = os.getenv("OIDC_TOKEN_URL", "")
+    oidc_redirect_uri: str = os.getenv("OIDC_REDIRECT_URI", "")
+    frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
