@@ -5,6 +5,10 @@ RUN useradd --create-home --uid 10001 appuser
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY backend ./backend
+# The explicit development seeder reads the controlled evaluation corpus at
+# runtime.  It is copied into the API image so Docker-based seeding is
+# reproducible without mounting host data.
+COPY evaluation ./evaluation
 RUN pip install --no-cache-dir .
 USER appuser
 EXPOSE 8000
