@@ -5,13 +5,15 @@ from datetime import datetime
 from sqlalchemy import (
     Boolean,
     DateTime,
-    Engine,
     ForeignKey,
     Integer,
     String,
     UniqueConstraint,
+    inspect,
     select,
+    text,
 )
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from backend.app.documents.persistence import Base
@@ -34,6 +36,7 @@ class UserRecord(Base):
     issuer: Mapped[str] = mapped_column(String(512), index=True)
     subject: Mapped[str] = mapped_column(String(512), index=True)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    department: Mapped[str | None] = mapped_column(String(128), nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     authorization_epoch: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -74,6 +77,15 @@ def bootstrap_identity_schema(engine: Engine) -> None:
     is intentionally additive and is not a migration replacement.
     """
     Base.metadata.create_all(engine)
+    # Phase 4 development compatibility: retain existing Phase 3/early Phase
+    # 4 data and add only missing identity columns.  Null department is an
+    # explicit absence of an attribute, never a privilege grant.
+    inspector = inspect(engine)
+    if "users" in inspector.get_table_names():
+        columns = {column["name"] for column in inspector.get_columns("users")}
+        if "department" not in columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN department VARCHAR(128)"))
 
 
 def active_memberships(session: Session, user: UserRecord) -> list[TenantMembershipRecord]:

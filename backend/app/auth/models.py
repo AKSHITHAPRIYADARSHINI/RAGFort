@@ -12,10 +12,17 @@ class Principal:
     authenticated_at: int | None = None
     display_name: str | None = None
     tenant_hint: str | None = None
+    # This optional OIDC claim is a session freshness marker emitted by the
+    # local development provider.  It is compared to PostgreSQL's current
+    # authorization epoch after the token has been cryptographically checked.
+    # Roles themselves are never accepted from the token.
+    authorization_epoch_hint: int | None = None
 
     def __post_init__(self) -> None:
         if not self.subject.strip() or not self.issuer.strip():
             raise ValueError("principal subject and issuer are required")
+        if self.authorization_epoch_hint is not None and self.authorization_epoch_hint < 0:
+            raise ValueError("principal authorization epoch cannot be negative")
 
 
 @dataclass(frozen=True)

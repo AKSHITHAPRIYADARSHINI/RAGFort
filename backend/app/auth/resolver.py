@@ -3,6 +3,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.auth.dependencies import StaleAuthorizationError
 from backend.app.auth.models import Principal, RequestContext
 from backend.app.auth.persistence import (
     MembershipRoleRecord,
@@ -40,12 +41,20 @@ class SqlAlchemyRequestContextResolver:
                     .where(MembershipRoleRecord.membership_id == membership.id)
                 )
             )
+            authorization_epoch = max(user.authorization_epoch, membership.authorization_epoch)
+            if (
+                principal.authorization_epoch_hint is not None
+                and principal.authorization_epoch_hint != authorization_epoch
+            ):
+                raise StaleAuthorizationError()
+            attributes = (("department", user.department),) if user.department else ()
             return RequestContext(
                 principal=principal,
                 user_id=user.id,
                 tenant_id=membership.tenant_id,
                 roles=roles,
-                authorization_epoch=max(user.authorization_epoch, membership.authorization_epoch),
+                attributes=attributes,
+                authorization_epoch=authorization_epoch,
                 policy_version=self.policy_version,
             )
 

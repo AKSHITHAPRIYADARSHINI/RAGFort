@@ -18,6 +18,13 @@ class AuthenticationUnavailableError(RuntimeError):
     message = "Authentication is unavailable right now."
 
 
+class StaleAuthorizationError(AuthenticationError):
+    """A valid token represents authorization state that has since changed."""
+
+    code = "SESSION_STALE"
+    message = "Your session is no longer current. Please sign in again."
+
+
 class TokenValidator(Protocol):
     """An OIDC implementation must validate signature and required JWT claims."""
 

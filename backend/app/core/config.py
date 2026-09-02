@@ -22,3 +22,6 @@ class Settings:
         if item.strip()
     )
     oidc_tenant_claim: str = os.getenv("OIDC_TENANT_CLAIM", "tenant_id")
+    oidc_authorization_epoch_claim: str = os.getenv(
+        "OIDC_AUTHORIZATION_EPOCH_CLAIM", "authorization_epoch"
+    )

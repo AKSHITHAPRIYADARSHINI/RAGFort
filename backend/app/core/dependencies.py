@@ -64,6 +64,7 @@ def get_request_context_dependency():
         jwks_url=settings.oidc_jwks_url,
         algorithms=settings.oidc_algorithms,
         tenant_claim=settings.oidc_tenant_claim,
+        authorization_epoch_claim=settings.oidc_authorization_epoch_claim,
     )
     return build_request_context_dependency(
         PyJwtOidcValidator(configuration),

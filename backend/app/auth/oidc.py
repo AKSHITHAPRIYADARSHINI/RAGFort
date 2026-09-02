@@ -18,6 +18,7 @@ class OidcConfiguration:
     jwks_url: str
     algorithms: tuple[str, ...] = ("RS256",)
     tenant_claim: str = "tenant_id"
+    authorization_epoch_claim: str = "authorization_epoch"
 
     def __post_init__(self) -> None:
         if not self.issuer or not self.audience or not self.jwks_url:
@@ -56,6 +57,11 @@ class PyJwtOidcValidator:
             raise AuthenticationError()
         name = claims.get("name")
         tenant_hint = claims.get(self.config.tenant_claim)
+        authorization_epoch = claims.get(self.config.authorization_epoch_claim)
+        if authorization_epoch is not None and (
+            not isinstance(authorization_epoch, int) or authorization_epoch < 0
+        ):
+            raise AuthenticationError()
         return Principal(
             subject=subject,
             issuer=self.config.issuer,
@@ -64,4 +70,5 @@ class PyJwtOidcValidator:
             ),
             display_name=name if isinstance(name, str) else None,
             tenant_hint=tenant_hint if isinstance(tenant_hint, str) and tenant_hint else None,
+            authorization_epoch_hint=authorization_epoch,
         )

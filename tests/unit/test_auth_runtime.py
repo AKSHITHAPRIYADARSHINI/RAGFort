@@ -2,7 +2,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.app.auth.dependencies import AuthenticationError, AuthenticationUnavailableError
+from backend.app.auth.dependencies import (
+    AuthenticationError,
+    AuthenticationUnavailableError,
+    StaleAuthorizationError,
+)
 from backend.app.auth.models import Principal
 from backend.app.auth.oidc import OidcConfiguration, PyJwtOidcValidator
 from backend.app.auth.persistence import (
@@ -81,6 +85,7 @@ def seed_identity(factory, second_membership: bool = False) -> None:
                     issuer="https://issuer.example.test",
                     subject="external-user",
                     authorization_epoch=3,
+                    department="Finance",
                 ),
                 RoleRecord(id="role_viewer", name="viewer"),
                 TenantMembershipRecord(
@@ -122,3 +127,35 @@ def test_resolver_denies_ambiguous_or_unmapped_membership(tmp_path) -> None:
         resolver.resolve(
             Principal("external-user", "https://issuer.example.test", tenant_hint="tenant_x")
         )
+
+
+def test_resolver_rejects_stale_authorization_epoch_and_disabled_user(tmp_path) -> None:
+    factory = make_session_factory(f"sqlite:///{tmp_path / 'identity.db'}")
+    seed_identity(factory)
+    resolver = SqlAlchemyRequestContextResolver(factory)
+
+    with pytest.raises(StaleAuthorizationError):
+        resolver.resolve(
+            Principal(
+                "external-user",
+                "https://issuer.example.test",
+                tenant_hint="tenant_a",
+                authorization_epoch_hint=4,
+            )
+        )
+    with factory.begin() as session:
+        session.get(UserRecord, "user_a").active = False
+    with pytest.raises(AuthorizationDeniedError):
+        resolver.resolve(
+            Principal("external-user", "https://issuer.example.test", tenant_hint="tenant_a")
+        )
+
+
+def test_validator_preserves_valid_authorization_epoch_claim(monkeypatch) -> None:
+    validator = PyJwtOidcValidator(config(), FakeJwks())
+    monkeypatch.setattr(
+        "backend.app.auth.oidc.jwt.decode",
+        lambda *_args, **_kwargs: {"sub": "external-user", "authorization_epoch": 7},
+    )
+
+    assert validator.validate("valid.token").authorization_epoch_hint == 7
