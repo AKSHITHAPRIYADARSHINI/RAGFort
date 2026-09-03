@@ -8,6 +8,7 @@ from backend.app.main import app
 
 class FakeDocumentService:
     def __init__(self) -> None:
+        self.upload_access = None
         self.record = {
             "document_id": "doc_test",
             "version_id": "ver_test",
@@ -18,7 +19,8 @@ class FakeDocumentService:
             "tenant_id": "tenant_acme",
         }
 
-    def upload(self, _name, _content_type, data):
+    def upload(self, _name, _content_type, data, *, access=None):
+        self.upload_access = access
         if len(data) > 5:
             raise FileTooLargeError()
         return self.record
@@ -67,6 +69,9 @@ def test_document_endpoints_use_safe_envelopes(monkeypatch) -> None:
         assert listed.status_code == 200
         assert listed.json()["data"]["documents"][0]["document_id"] == "doc_test"
         assert uploaded.status_code == 200 and uploaded.json()["request_id"].startswith("req_")
+        assert service.upload_access is not None
+        assert service.upload_access.tenant_id == "tenant_acme"
+        assert service.upload_access.allowed_role_ids == ("admin",)
         assert approved.json()["data"]["status"] == "INDEXED"
         assert findings.json()["data"]["findings"] == []
     finally:

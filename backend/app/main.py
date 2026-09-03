@@ -28,7 +28,7 @@ from backend.app.core.dependencies import (
     get_settings,
     require_request_context,
 )
-from backend.app.documents.models import DocumentError
+from backend.app.documents.models import DocumentAccessAssignment, DocumentError
 from backend.app.rag.embeddings import EmbeddingUnavailableError
 from backend.app.rag.generation import GenerationUnavailableError
 from backend.app.rag.retrieval import RetrievalScope, RetrievalUnavailableError
@@ -220,6 +220,15 @@ def _scope(context: RequestContext) -> RetrievalScope:
     )
 
 
+def _upload_access_assignment(context: RequestContext) -> DocumentAccessAssignment:
+    """Derive new-document access state from the canonical principal only."""
+    return DocumentAccessAssignment(
+        tenant_id=context.tenant_id,
+        allowed_role_ids=tuple(sorted(context.roles)),
+        department=context.attribute_map.get("department"),
+    )
+
+
 def _document_resource(document: dict) -> ResourceAttributes:
     """Build policy input only from persisted server output.
 
@@ -321,7 +330,12 @@ async def upload_document(
     try:
         AuthorizationService().require("document:upload", context)
         raw_bytes = await file.read(1_000_001)
-        result = get_document_service().upload(file.filename or "", file.content_type, raw_bytes)
+        result = get_document_service().upload(
+            file.filename or "",
+            file.content_type,
+            raw_bytes,
+            access=_upload_access_assignment(context),
+        )
     except DocumentError as error:
         return _document_error(error, request)
     return JSONResponse({"success": True, "data": result, "request_id": request.state.request_id})

@@ -1,0 +1,4 @@
+Phase 4 browser lifecycle fixture.
+
+This synthetic document exists solely to verify that a Knowledge Manager can
+submit and approve a tenant-scoped document through the protected browser UI.
