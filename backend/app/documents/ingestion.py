@@ -380,6 +380,10 @@ class DocumentService:
             # serializing a permitted record.  It is never derived from a
             # caller-controlled document request.
             "tenant_id": document.tenant_id,
+            # Internal authorization input. API routes remove underscore-prefixed
+            # fields before serialization so document ACLs are never a browser
+            # authorization surface or routine user-visible metadata.
+            "_allowed_role_ids": json.loads(document.allowed_role_ids_json),
             "detected_type": version.detected_type,
             "size_bytes": version.byte_size,
             "index_state": version.index_state,

@@ -239,14 +239,25 @@ def _document_resource(document: dict) -> ResourceAttributes:
     tenant_id = document.get("tenant_id")
     classification = document.get("classification")
     lifecycle_status = document.get("status")
+    allowed_roles = document.get("_allowed_role_ids")
     metadata = (tenant_id, classification, lifecycle_status)
     if not all(isinstance(value, str) and value for value in metadata):
+        raise AuthorizationDeniedError()
+    if not isinstance(allowed_roles, list) or not allowed_roles or not all(
+        isinstance(role, str) and role for role in allowed_roles
+    ):
         raise AuthorizationDeniedError()
     return ResourceAttributes(
         tenant_id=tenant_id,
         classification=classification,
         lifecycle_status=lifecycle_status,
+        allowed_role_ids=tuple(allowed_roles),
     )
+
+
+def _public_document(document: dict) -> dict:
+    """Keep server-owned ACL inputs out of ordinary document API responses."""
+    return {key: value for key, value in document.items() if not key.startswith("_")}
 
 
 def _require_document_access(action: str, context: RequestContext, document: dict) -> None:
@@ -338,7 +349,9 @@ async def upload_document(
         )
     except DocumentError as error:
         return _document_error(error, request)
-    return JSONResponse({"success": True, "data": result, "request_id": request.state.request_id})
+    return JSONResponse(
+        {"success": True, "data": _public_document(result), "request_id": request.state.request_id}
+    )
 
 
 @app.post("/api/v1/documents/{document_id}/scan")
@@ -352,7 +365,9 @@ async def rescan_document(
         result = get_document_service().rescan(document_id)
     except DocumentError as error:
         return _document_error(error, request, 404 if error.code == "DOCUMENT_NOT_FOUND" else 400)
-    return JSONResponse({"success": True, "data": result, "request_id": request.state.request_id})
+    return JSONResponse(
+        {"success": True, "data": _public_document(result), "request_id": request.state.request_id}
+    )
 
 
 @app.get("/api/v1/documents")
@@ -374,7 +389,7 @@ async def list_documents(
             _require_document_access("document:read", context, document)
         except AuthorizationDeniedError:
             continue
-        visible.append(document)
+        visible.append(_public_document(document))
     return JSONResponse(
         {"success": True, "data": {"documents": visible}, "request_id": request.state.request_id}
     )
@@ -390,7 +405,9 @@ async def document_detail(
         result = _load_authorized_document(document_id, "document:read", context)
     except DocumentError as error:
         return _document_error(error, request, 404 if error.code == "DOCUMENT_NOT_FOUND" else 400)
-    return JSONResponse({"success": True, "data": result, "request_id": request.state.request_id})
+    return JSONResponse(
+        {"success": True, "data": _public_document(result), "request_id": request.state.request_id}
+    )
 
 
 @app.get("/api/v1/documents/{document_id}/security")
@@ -405,7 +422,9 @@ async def document_security(
         )
     except DocumentError as error:
         return _document_error(error, request, 404 if error.code == "DOCUMENT_NOT_FOUND" else 400)
-    return JSONResponse({"success": True, "data": result, "request_id": request.state.request_id})
+    return JSONResponse(
+        {"success": True, "data": _public_document(result), "request_id": request.state.request_id}
+    )
 
 
 @app.post("/api/v1/documents/{document_id}/approve")
@@ -419,7 +438,9 @@ async def approve_document(
         result = get_document_service().approve(document_id)
     except DocumentError as error:
         return _document_error(error, request)
-    return JSONResponse({"success": True, "data": result, "request_id": request.state.request_id})
+    return JSONResponse(
+        {"success": True, "data": _public_document(result), "request_id": request.state.request_id}
+    )
 
 
 @app.post("/api/v1/documents/{document_id}/quarantine")
@@ -433,7 +454,9 @@ async def quarantine_document(
         result = get_document_service().quarantine(document_id)
     except DocumentError as error:
         return _document_error(error, request, 404 if error.code == "DOCUMENT_NOT_FOUND" else 400)
-    return JSONResponse({"success": True, "data": result, "request_id": request.state.request_id})
+    return JSONResponse(
+        {"success": True, "data": _public_document(result), "request_id": request.state.request_id}
+    )
 
 
 @app.delete("/api/v1/documents/{document_id}")

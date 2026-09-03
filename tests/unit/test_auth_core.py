@@ -55,8 +55,26 @@ def test_classification_and_lifecycle_are_enforced_deterministically() -> None:
     unapproved = policy.decide(
         "document:read",
         context("admin"),
-        ResourceAttributes(tenant_id="tenant_a", lifecycle_status="REVIEW_REQUIRED"),
+        ResourceAttributes(
+            tenant_id="tenant_a",
+            lifecycle_status="REVIEW_REQUIRED",
+            allowed_role_ids=("admin",),
+        ),
     )
 
     assert restricted.reason == "CLASSIFICATION_DENIED"
     assert unapproved.reason == "LIFECYCLE_DENIED"
+
+
+def test_document_acl_denies_roles_not_in_server_owned_assignment() -> None:
+    decision = AuthorizationService().decide(
+        "document:read",
+        context("viewer"),
+        ResourceAttributes(
+            tenant_id="tenant_a",
+            allowed_role_ids=("reviewer",),
+        ),
+    )
+
+    assert not decision.allowed
+    assert decision.reason == "ROLE_ACL_DENIED"

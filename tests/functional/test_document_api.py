@@ -17,6 +17,7 @@ class FakeDocumentService:
             "classification": "INTERNAL",
             "index_state": "NOT_INDEXED",
             "tenant_id": "tenant_acme",
+            "_allowed_role_ids": ["admin"],
         }
 
     def upload(self, _name, _content_type, data, *, access=None):

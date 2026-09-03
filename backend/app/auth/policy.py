@@ -16,6 +16,7 @@ class ResourceAttributes:
     tenant_id: str
     classification: str = "INTERNAL"
     lifecycle_status: str = "INDEXED"
+    allowed_role_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -99,6 +100,10 @@ class AuthorizationService:
             classifications = self.allowed_classifications(context)
             if resource.classification not in classifications:
                 return PolicyDecision(False, action, "CLASSIFICATION_DENIED")
+            if not resource.allowed_role_ids or not (
+                context.roles.intersection(resource.allowed_role_ids)
+            ):
+                return PolicyDecision(False, action, "ROLE_ACL_DENIED")
             if not self._lifecycle_allows(action, resource.lifecycle_status):
                 return PolicyDecision(False, action, "LIFECYCLE_DENIED")
         scope = self.retrieval_scope(context) if action == "query" else None
