@@ -24,6 +24,7 @@ from backend.app.auth.session import local_oidc_sessions
 from backend.app.core.dependencies import (
     get_document_service,
     get_query_service,
+    get_request_context_dependency,
     get_settings,
     require_request_context,
 )
@@ -107,7 +108,8 @@ async def oidc_callback(code: str, state: str) -> RedirectResponse:
     expires_in = token_data.get("expires_in")
     if not isinstance(token, str) or not isinstance(expires_in, int):
         raise AuthenticationError()
-    session_id = local_oidc_sessions.create(token, expires_in)
+    context = get_request_context_dependency()(f"Bearer {token}")
+    session_id = local_oidc_sessions.create(token, expires_in, context.authorization_epoch)
     response = RedirectResponse(settings.frontend_url, status_code=302)
     response.set_cookie(
         "ragfort_session",

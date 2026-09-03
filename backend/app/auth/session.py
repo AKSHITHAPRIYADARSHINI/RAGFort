@@ -20,6 +20,7 @@ class PendingLogin:
 class BrowserSession:
     access_token: str
     expires_at: float
+    authorization_epoch: int
 
 
 class LocalOidcSessionStore:
@@ -36,9 +37,11 @@ class LocalOidcSessionStore:
         pending = self._pending.pop(state, None)
         return pending if pending and pending.expires_at >= time() else None
 
-    def create(self, access_token: str, expires_in: int) -> str:
+    def create(self, access_token: str, expires_in: int, authorization_epoch: int) -> str:
         session_id = token_urlsafe(32)
-        self._sessions[session_id] = BrowserSession(access_token, time() + expires_in)
+        self._sessions[session_id] = BrowserSession(
+            access_token, time() + expires_in, authorization_epoch
+        )
         return session_id
 
     def token(self, session_id: str | None) -> str | None:
@@ -49,6 +52,10 @@ class LocalOidcSessionStore:
             self._sessions.pop(session_id, None)
             return None
         return session.access_token
+
+    def epoch(self, session_id: str | None) -> int | None:
+        session = self._sessions.get(session_id or "")
+        return session.authorization_epoch if session and session.expires_at >= time() else None
 
     def revoke(self, session_id: str | None) -> None:
         if session_id:

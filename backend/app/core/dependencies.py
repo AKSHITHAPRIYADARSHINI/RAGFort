@@ -3,7 +3,11 @@ from functools import lru_cache
 from fastapi import Cookie, Header
 from qdrant_client import QdrantClient
 
-from backend.app.auth.dependencies import build_request_context_dependency, extract_bearer_token
+from backend.app.auth.dependencies import (
+    StaleAuthorizationError,
+    build_request_context_dependency,
+    extract_bearer_token,
+)
 from backend.app.auth.oidc import OidcConfiguration, PyJwtOidcValidator
 from backend.app.auth.resolver import SqlAlchemyRequestContextResolver
 from backend.app.auth.session import local_oidc_sessions
@@ -86,4 +90,10 @@ def require_request_context(
     )
     if token is None:
         extract_bearer_token(None)
-    return get_request_context_dependency()(f"Bearer {token}")
+    context = get_request_context_dependency()(f"Bearer {token}")
+    if not authorization:
+        session_epoch = local_oidc_sessions.epoch(ragfort_session)
+        if session_epoch != context.authorization_epoch:
+            local_oidc_sessions.revoke(ragfort_session)
+            raise StaleAuthorizationError()
+    return context
