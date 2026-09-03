@@ -1,0 +1,4 @@
+Phase 4 Knowledge Manager browser lifecycle fixture.
+
+This synthetic tenant-scoped document is used only for the final protected
+browser upload and approval validation.

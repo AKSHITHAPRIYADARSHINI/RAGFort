@@ -149,7 +149,10 @@ class DocumentService:
             if duplicate:
                 return self._summary(session.get(DocumentRecord, duplicate.document_id), duplicate)
             document = session.scalar(
-                select(DocumentRecord).where(DocumentRecord.safe_display_name == safe_name)
+                select(DocumentRecord).where(
+                    DocumentRecord.safe_display_name == safe_name,
+                    DocumentRecord.tenant_id == assignment.tenant_id,
+                )
             )
             if document is None:
                 document = DocumentRecord(

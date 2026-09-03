@@ -109,6 +109,26 @@ def test_new_content_under_the_same_name_creates_a_new_unapproved_version(tmp_pa
     assert len(index.chunks) == 1
 
 
+def test_same_safe_name_is_not_reused_across_tenants(tmp_path: Path) -> None:
+    service, _, _ = build_service(tmp_path)
+    acme = service.upload(
+        "shared-policy.txt",
+        "text/plain",
+        b"ACME tenant content.",
+        access=DocumentAccessAssignment("tenant_acme", ("reviewer",)),
+    )
+    globex = service.upload(
+        "shared-policy.txt",
+        "text/plain",
+        b"GLOBEX tenant content.",
+        access=DocumentAccessAssignment("tenant_globex", ("reviewer",)),
+    )
+
+    assert globex["document_id"] != acme["document_id"]
+    assert service.get_document(acme["document_id"])["tenant_id"] == "tenant_acme"
+    assert service.get_document(globex["document_id"])["tenant_id"] == "tenant_globex"
+
+
 def test_integrity_mismatch_quarantines_before_indexing(tmp_path: Path) -> None:
     service, factory, index = build_service(tmp_path)
     uploaded = service.upload("integrity.txt", "text/plain", b"Integrity evidence is immutable.")
