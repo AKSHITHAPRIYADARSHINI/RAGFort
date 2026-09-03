@@ -194,6 +194,15 @@ class KeycloakAdmin:
         )
         if not clients:
             self._admin_request("POST", f"/realms/{REALM}/clients", payload)
+            return
+        # A local realm may predate a newly added callback URI. Update only
+        # the client representation; protocol mappers are maintained through
+        # their dedicated API below and are not copied from browser input.
+        existing = clients[0]
+        if existing.get("redirectUris") != payload.get("redirectUris"):
+            existing["redirectUris"] = payload.get("redirectUris", [])
+            existing["webOrigins"] = payload.get("webOrigins", [])
+            self._admin_request("PUT", f"/realms/{REALM}/clients/{existing['id']}", existing)
 
     def ensure_clients(self) -> None:
         self.ensure_client(
