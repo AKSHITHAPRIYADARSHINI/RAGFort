@@ -121,6 +121,33 @@ pass. A live disabled-account probe also returned `200` while active and `403`
 after `active=false`, then restored the synthetic account. The complete browser
 multi-user revocation/logout matrix remains an explicit closure requirement.
 
+### Browser E2E evidence (September 3, 2026)
+
+- ACME Employee completed a real Keycloak PKCE login and received a grounded
+  answer with an ACME citation for `FALCON-AMBER-731`.
+- The same browser session queried `COBALT-RIVER-942` and received the safe
+  insufficient-context state with no source card, confirming that no GLOBEX
+  evidence was disclosed in that UI flow.
+- ACME HR Reader queried `FINANCE-ORCHID-815` and received the same safe
+  insufficient-context state with no Finance citation. ACME Finance Reader
+  previously received the authorized Finance answer and citation.
+- The real browser sign-out control removed the opaque session. The app returned
+  to the sign-in gate and a same-browser `GET /api/v1/me` returned `401
+  UNAUTHENTICATED`.
+- A live browser session was invalidated after its PostgreSQL
+  `authorization_epoch` changed; revisiting the application returned the user to
+  the sign-in gate before a protected query could run.
+
+These results retain the measured retrieval-security values: 
+`cross_tenant_leakage = 0`, `forbidden_chunks = 0`, and
+`forbidden_citations = 0` for the controlled marker corpus.
+
+Phase 4 remains **PARTIAL** at this checkpoint. The browser Documents route needs
+its final end-to-end lifecycle/RBAC pass after the local Next.js development
+server asset cache is refreshed, and the final specialist/security closure review
+and complete closure validation have not yet been recorded. Consequently the
+`phase-4-complete` tag has not been created.
+
 ## 10. Output
 
 Initial output: ADR-018 and this implementation report.  The final update will list
