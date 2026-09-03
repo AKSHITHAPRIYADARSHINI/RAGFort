@@ -138,7 +138,7 @@ multi-user revocation/logout matrix remains an explicit closure requirement.
   `authorization_epoch` changed; revisiting the application returned the user to
   the sign-in gate before a protected query could run.
 
-These results retain the measured retrieval-security values: 
+These results retain the measured retrieval-security values:
 `cross_tenant_leakage = 0`, `forbidden_chunks = 0`, and
 `forbidden_citations = 0` for the controlled marker corpus.
 
