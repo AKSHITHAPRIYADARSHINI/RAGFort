@@ -101,6 +101,18 @@ Phase 4 cannot close yet: a browser authorization-code callback/session, real
 logout and session-expiry E2E, runtime authorization-epoch and disabled-account
 mutation tests, and the final browser regressions remain unverified.
 
+### Browser-session evidence
+
+The local browser flow now uses PKCE authorization code login through Keycloak.
+FastAPI exchanges the code and retains the access token only in its local
+server-side session store; the browser receives an opaque `HttpOnly`, `SameSite`
+cookie and frontend JavaScript never receives a bearer token. Browser automation
+verified the unauthenticated sign-in gate, Keycloak login, callback to the
+authenticated Ask page, and an ACME grounded answer with its permitted citation.
+The in-memory local store is intentionally lost on API restart, which safely
+returns the browser to the sign-in gate. Production session persistence and a
+distributed revocation store remain Phase 8 work.
+
 ## 10. Output
 
 Initial output: ADR-018 and this implementation report.  The final update will list
