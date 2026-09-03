@@ -282,6 +282,24 @@ class KeycloakAdmin:
                         },
                     },
                 )
+            if "authorization-epoch" not in names:
+                self._admin_request(
+                    "POST",
+                    mapper_path,
+                    {
+                        "name": "authorization-epoch",
+                        "protocol": "openid-connect",
+                        "protocolMapper": "oidc-usermodel-attribute-mapper",
+                        "config": {
+                            "user.attribute": "authorization_epoch",
+                            "claim.name": "authorization_epoch",
+                            "jsonType.label": "int",
+                            "access.token.claim": "true",
+                            "id.token.claim": "true",
+                            "userinfo.token.claim": "true",
+                        },
+                    },
+                )
 
     def ensure_user(self, identity: SyntheticIdentity, password: str) -> str:
         users = self._admin_request(
@@ -295,7 +313,11 @@ class KeycloakAdmin:
             "lastName": "User",
             "requiredActions": [],
             "firstName": identity.display_name,
-            "attributes": {"tenant_id": [identity.tenant_id], "department": [identity.department]},
+            "attributes": {
+                "tenant_id": [identity.tenant_id],
+                "department": [identity.department],
+                "authorization_epoch": ["0"],
+            },
         }
         if not users:
             self._admin_request("POST", f"/realms/{REALM}/users", data)
