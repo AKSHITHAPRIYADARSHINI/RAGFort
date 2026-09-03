@@ -113,6 +113,14 @@ The in-memory local store is intentionally lost on API restart, which safely
 returns the browser to the sign-in gate. Production session persistence and a
 distributed revocation store remain Phase 8 work.
 
+The server-held browser session now stores the canonical authorization epoch at
+login and compares it with PostgreSQL on every cookie-authenticated request. A
+mismatch revokes the opaque session before the route can reach embedding,
+retrieval, context building, or generation. Focused session/revocation tests
+pass. A live disabled-account probe also returned `200` while active and `403`
+after `active=false`, then restored the synthetic account. The complete browser
+multi-user revocation/logout matrix remains an explicit closure requirement.
+
 ## 10. Output
 
 Initial output: ADR-018 and this implementation report.  The final update will list
