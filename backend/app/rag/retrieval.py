@@ -158,18 +158,21 @@ class QdrantRetriever:
         except Exception as error:  # backend boundary maps provider exceptions safely
             raise RetrievalUnavailableError("Retrieval service is unavailable.") from error
         payloads = [point.payload or {} for point in response.points]
-        eligible_versions = (
-            self.authoritative_version_ids(
-                [
-                    str(payload["version_id"])
-                    for payload in payloads
-                    if isinstance(payload.get("version_id"), str)
-                ],
-                scope,
-            )
-            if scope is not None and self.authoritative_version_ids is not None
-            else None
-        )
+        eligible_versions = None
+        if scope is not None and self.authoritative_version_ids is not None:
+            try:
+                eligible_versions = self.authoritative_version_ids(
+                    [
+                        str(payload["version_id"])
+                        for payload in payloads
+                        if isinstance(payload.get("version_id"), str)
+                    ],
+                    scope,
+                )
+            except Exception as error:
+                raise RetrievalUnavailableError(
+                    "Authoritative lifecycle validation is unavailable."
+                ) from error
         results: list[RetrievalResult] = []
         for point in response.points:
             payload = point.payload or {}
