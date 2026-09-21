@@ -1,7 +1,9 @@
+import json
 from functools import lru_cache
 
 from fastapi import Cookie, Header
 from qdrant_client import QdrantClient
+from sqlalchemy import select
 
 from backend.app.auth.dependencies import (
     StaleAuthorizationError,
@@ -13,12 +15,16 @@ from backend.app.auth.resolver import SqlAlchemyRequestContextResolver
 from backend.app.auth.session import local_oidc_sessions
 from backend.app.core.config import Settings
 from backend.app.documents.ingestion import DocumentService
-from backend.app.documents.persistence import make_session_factory
+from backend.app.documents.persistence import (
+    DocumentRecord,
+    DocumentVersionRecord,
+    make_session_factory,
+)
 from backend.app.rag.citations import CitationFormatter
 from backend.app.rag.context import ContextBuilder
 from backend.app.rag.embeddings import HashEmbeddingService
 from backend.app.rag.generation import ExtractiveGenerationService
-from backend.app.rag.retrieval import QdrantRetriever
+from backend.app.rag.retrieval import QdrantRetriever, RetrievalScope
 from backend.app.rag.service import QueryService
 
 
@@ -29,10 +35,35 @@ def get_settings() -> Settings:
 
 def get_query_service() -> QueryService:
     settings = get_settings()
+
+    def authoritative_version_ids(version_ids: list[str], scope: RetrievalScope) -> set[str]:
+        if not version_ids:
+            return set()
+        with get_document_session_factory()() as session:
+            rows = session.execute(
+                select(DocumentVersionRecord, DocumentRecord)
+                .join(DocumentRecord, DocumentVersionRecord.document_id == DocumentRecord.id)
+                .where(DocumentVersionRecord.id.in_(version_ids))
+            ).all()
+        return {
+            version.id
+            for version, document in rows
+            if document.current_version_id == version.id
+            and document.status == "INDEXED"
+            and version.status == "INDEXED"
+            and version.index_state == "INDEXED"
+            and document.tenant_id == scope.tenant_id
+            and version.tenant_id == scope.tenant_id
+            and version.classification in scope.allowed_classifications
+            and bool(set(scope.role_ids).intersection(json.loads(version.allowed_role_ids_json)))
+        }
+
     return QueryService(
         embeddings=HashEmbeddingService(),
         retriever=QdrantRetriever(
-            QdrantClient(url=settings.qdrant_url), settings.qdrant_collection
+            QdrantClient(url=settings.qdrant_url),
+            settings.qdrant_collection,
+            authoritative_version_ids,
         ),
         context_builder=ContextBuilder(
             max_chunks=settings.rag_top_k, max_context_tokens=settings.rag_max_context_tokens

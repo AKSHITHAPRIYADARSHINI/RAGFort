@@ -1,4 +1,4 @@
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 from uuid import NAMESPACE_URL, uuid5
@@ -53,9 +53,15 @@ class Retriever(Protocol):
 class QdrantRetriever:
     """Qdrant adapter. Callers may pass only trusted, server-derived filters."""
 
-    def __init__(self, client: QdrantClient, collection: str) -> None:
+    def __init__(
+        self,
+        client: QdrantClient,
+        collection: str,
+        authoritative_version_ids: Callable[[list[str], RetrievalScope], set[str]] | None = None,
+    ) -> None:
         self.client = client
         self.collection = collection
+        self.authoritative_version_ids = authoritative_version_ids
 
     @staticmethod
     def _equality_filter(filters: Mapping[str, Any] | None) -> models.Filter | None:
@@ -98,15 +104,11 @@ class QdrantRetriever:
                 models.FieldCondition(
                     key="approval_status", match=models.MatchValue(value="approved")
                 ),
-                models.FieldCondition(
-                    key="index_state", match=models.MatchValue(value="INDEXED")
-                ),
+                models.FieldCondition(key="index_state", match=models.MatchValue(value="INDEXED")),
                 models.FieldCondition(
                     key="document_status", match=models.MatchValue(value="INDEXED")
                 ),
-                models.FieldCondition(
-                    key="current_version", match=models.MatchValue(value=True)
-                ),
+                models.FieldCondition(key="current_version", match=models.MatchValue(value=True)),
                 models.FieldCondition(
                     key="security_metadata_version",
                     match=models.MatchValue(value=PHASE4_SECURITY_METADATA_VERSION),
@@ -138,9 +140,8 @@ class QdrantRetriever:
         if isinstance(allowed_users, list) and scope.user_id in allowed_users:
             return True
         allowed_roles = payload.get("allowed_role_ids", [])
-        return (
-            isinstance(allowed_roles, list)
-            and bool(set(scope.role_ids).intersection(str(role) for role in allowed_roles))
+        return isinstance(allowed_roles, list) and bool(
+            set(scope.role_ids).intersection(str(role) for role in allowed_roles)
         )
 
     def search(
@@ -156,6 +157,19 @@ class QdrantRetriever:
             )
         except Exception as error:  # backend boundary maps provider exceptions safely
             raise RetrievalUnavailableError("Retrieval service is unavailable.") from error
+        payloads = [point.payload or {} for point in response.points]
+        eligible_versions = (
+            self.authoritative_version_ids(
+                [
+                    str(payload["version_id"])
+                    for payload in payloads
+                    if isinstance(payload.get("version_id"), str)
+                ],
+                scope,
+            )
+            if scope is not None and self.authoritative_version_ids is not None
+            else None
+        )
         results: list[RetrievalResult] = []
         for point in response.points:
             payload = point.payload or {}
@@ -163,6 +177,8 @@ class QdrantRetriever:
             if not required.issubset(payload):
                 continue
             if scope is not None and not self._matches_scope(payload, scope):
+                continue
+            if eligible_versions is not None and payload.get("version_id") not in eligible_versions:
                 continue
             metadata = {
                 key: value

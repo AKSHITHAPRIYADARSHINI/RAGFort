@@ -64,9 +64,13 @@ def _service(retriever: QdrantRetriever) -> QueryService:
     )
 
 
-def _seed(chunks: list[DocumentChunk]) -> tuple[HashEmbeddingService, QdrantRetriever]:
+def _seed(
+    chunks: list[DocumentChunk], authoritative_version_ids=None
+) -> tuple[HashEmbeddingService, QdrantRetriever]:
     embeddings = HashEmbeddingService()
-    retriever = QdrantRetriever(QdrantClient(path=":memory:"), "phase4_secure_retrieval")
+    retriever = QdrantRetriever(
+        QdrantClient(path=":memory:"), "phase4_secure_retrieval", authoritative_version_ids
+    )
     retriever.ensure_collection(embeddings.dimension)
     retriever.upsert(chunks, embeddings.embed_documents([chunk.text for chunk in chunks]))
     return embeddings, retriever
@@ -169,3 +173,37 @@ def test_classification_and_unsafe_lifecycle_states_are_excluded_before_results(
     assert classification_results == []
     assert "doc_acme_finance" not in {item.document_id for item in lifecycle_results}
     assert PHASE4_SECURITY_METADATA_VERSION == "phase4-v1"
+
+
+def test_authoritative_lifecycle_revalidation_excludes_stale_quarantined_and_deleted_vectors() -> (
+    None
+):
+    finance = next(record for record in _records() if record["document_id"] == "doc_acme_finance")
+    indexed = _chunk(finance)
+    stale_quarantined = DocumentChunk(
+        "stale-quarantined",
+        indexed.document_id,
+        1,
+        indexed.text,
+        {**indexed.metadata, "version_id": "doc_acme_finance:stale-quarantined"},
+    )
+    stale_deleted = DocumentChunk(
+        "stale-deleted",
+        indexed.document_id,
+        2,
+        indexed.text,
+        {**indexed.metadata, "version_id": "doc_acme_finance:stale-deleted"},
+    )
+    allowed = {str(indexed.metadata["version_id"])}
+    embeddings, retriever = _seed(
+        [indexed, stale_quarantined, stale_deleted], lambda _ids, _scope: allowed
+    )
+    scope = RetrievalScope(
+        "tenant_acme", "acme_finance", ("PUBLIC", "INTERNAL", "CONFIDENTIAL"), ("finance_reader",)
+    )
+
+    results = retriever.search(embeddings.embed_query("FINANCE-ORCHID-815"), 5, scope)
+    outcome = _service(retriever).query("What is FINANCE-ORCHID-815?", scope)
+
+    assert [result.metadata["version_id"] for result in results] == [indexed.metadata["version_id"]]
+    assert [source.chunk_id for source in outcome.sources] == [indexed.chunk_id]
