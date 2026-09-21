@@ -15,3 +15,7 @@ class SecurityDetectionUnavailableError(SecurityAnalysisError):
 
 class SecurityContextInspectionUnavailableError(SecurityAnalysisError):
     """Retrieved context could not be inspected safely."""
+
+
+class SecurityEventPersistenceUnavailableError(SecurityAnalysisError):
+    """Required minimized security evidence could not be recorded."""

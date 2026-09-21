@@ -27,6 +27,10 @@ from backend.app.rag.embeddings import HashEmbeddingService
 from backend.app.rag.generation import ExtractiveGenerationService
 from backend.app.rag.retrieval import QdrantRetriever, RetrievalScope
 from backend.app.rag.service import QueryService
+from backend.app.security.analyzer import InputSecurityAnalyzer
+from backend.app.security.audit import SecurityEventSink, SqlAlchemySecurityEventSink
+from backend.app.security.context_guard import ContextSecurityGuard
+from backend.app.security.policy import DeterministicSecurityPolicy
 
 
 @lru_cache
@@ -116,7 +120,23 @@ def get_query_service() -> QueryService:
         top_k=settings.rag_top_k,
         min_score=settings.rag_min_retrieval_score,
         dev_trace=settings.ragfort_dev_trace,
+        context_guard=ContextSecurityGuard(),
     )
+
+
+@lru_cache
+def get_input_security_analyzer() -> InputSecurityAnalyzer:
+    return InputSecurityAnalyzer()
+
+
+@lru_cache
+def get_security_policy() -> DeterministicSecurityPolicy:
+    return DeterministicSecurityPolicy()
+
+
+@lru_cache
+def get_security_event_sink() -> SecurityEventSink:
+    return SqlAlchemySecurityEventSink(get_document_session_factory())
 
 
 @lru_cache

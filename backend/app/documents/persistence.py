@@ -53,6 +53,28 @@ class DocumentVersionRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class SecurityEventRecord(Base):
+    """Minimized Phase 5 audit evidence; never stores raw prompts or chunks."""
+
+    __tablename__ = "security_events"
+    event_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    request_id: Mapped[str] = mapped_column(String(64), index=True)
+    detection_id: Mapped[str] = mapped_column(String(64), index=True)
+    subject_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    tenant_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    categories_json: Mapped[str] = mapped_column(Text)
+    severity: Mapped[str] = mapped_column(String(16))
+    risk_score: Mapped[int] = mapped_column(Integer)
+    policy_action: Mapped[str] = mapped_column(String(24))
+    detector_version: Mapped[str] = mapped_column(String(64))
+    policy_version: Mapped[str] = mapped_column(String(64))
+    route: Mapped[str] = mapped_column(String(128))
+    outcome: Mapped[str] = mapped_column(String(32))
+    indicator_codes_json: Mapped[str] = mapped_column(Text)
+    safe_metadata_json: Mapped[str] = mapped_column(Text)
+
+
 def make_session_factory(database_url: str):
     connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
     engine = create_engine(database_url, future=True, connect_args=connect_args)

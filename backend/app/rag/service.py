@@ -7,6 +7,7 @@ from backend.app.rag.embeddings import EmbeddingService, EmbeddingUnavailableErr
 from backend.app.rag.generation import GenerationService, GenerationUnavailableError
 from backend.app.rag.models import QueryOutcome
 from backend.app.rag.retrieval import RetrievalScope, Retriever
+from backend.app.security.context_guard import ContextSecurityGuard
 
 
 class QueryService:
@@ -20,6 +21,7 @@ class QueryService:
         top_k: int,
         min_score: float,
         dev_trace: bool = False,
+        context_guard: ContextSecurityGuard | None = None,
     ) -> None:
         self.embeddings = embeddings
         self.retriever = retriever
@@ -29,6 +31,10 @@ class QueryService:
         self.top_k = top_k
         self.min_score = min_score
         self.dev_trace = dev_trace
+        # Only the production dependency supplies this guard. Keeping it
+        # optional preserves isolated Phase 2/4 component tests while the
+        # authenticated route always uses the guarded Phase 5 service.
+        self.context_guard = context_guard
 
     def query(self, question: str, scope: RetrievalScope | None = None) -> QueryOutcome:
         """Execute retrieval using an optional trusted policy scope.
@@ -61,6 +67,15 @@ class QueryService:
                 answer_status="insufficient_context",
                 trace={**trace, "retrieved_chunks": 0} if self.dev_trace else None,
             )
+        if self.context_guard is not None:
+            guarded = self.context_guard.inspect(usable)
+            usable = list(guarded.safe_results)
+            if not usable:
+                return QueryOutcome(
+                    answer=None,
+                    answer_status="insufficient_context",
+                    trace={**trace, "retrieved_chunks": 0} if self.dev_trace else None,
+                )
         started = time.perf_counter()
         context = self.context_builder.build(usable)
         trace["context_duration_ms"] = round((time.perf_counter() - started) * 1000, 2)

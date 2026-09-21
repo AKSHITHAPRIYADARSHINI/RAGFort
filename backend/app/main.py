@@ -23,8 +23,11 @@ from backend.app.auth.policy import (
 from backend.app.auth.session import local_oidc_sessions
 from backend.app.core.dependencies import (
     get_document_service,
+    get_input_security_analyzer,
     get_query_service,
     get_request_context_dependency,
+    get_security_event_sink,
+    get_security_policy,
     get_settings,
     require_request_context,
 )
@@ -32,6 +35,12 @@ from backend.app.documents.models import DocumentAccessAssignment, DocumentError
 from backend.app.rag.embeddings import EmbeddingUnavailableError
 from backend.app.rag.generation import GenerationUnavailableError
 from backend.app.rag.retrieval import RetrievalScope, RetrievalUnavailableError
+from backend.app.security.events import SecurityEventFactory
+from backend.app.security.failures import (
+    SecurityAnalysisError,
+    SecurityContextInspectionUnavailableError,
+)
+from backend.app.security.models import PolicyAction
 
 app = FastAPI(title="RAGFort API", version="0.1.0", docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(
@@ -249,8 +258,10 @@ def _document_resource(document: dict) -> ResourceAttributes:
     metadata = (tenant_id, classification, lifecycle_status)
     if not all(isinstance(value, str) and value for value in metadata):
         raise AuthorizationDeniedError()
-    if not isinstance(allowed_roles, list) or not allowed_roles or not all(
-        isinstance(role, str) and role for role in allowed_roles
+    if (
+        not isinstance(allowed_roles, list)
+        or not allowed_roles
+        or not all(isinstance(role, str) and role for role in allowed_roles)
     ):
         raise AuthorizationDeniedError()
     return ResourceAttributes(
@@ -319,6 +330,27 @@ async def query(
             },
         )
     try:
+        detection = get_input_security_analyzer().analyze(
+            question, request_id=request.state.request_id
+        )
+        decision = get_security_policy().decide(detection)
+        if detection.detected:
+            event = SecurityEventFactory().from_detection(
+                detection,
+                decision,
+                request_id=request.state.request_id,
+                canonical_subject_id=context.user_id,
+                canonical_tenant_id=context.tenant_id,
+                route="/api/v1/query",
+                outcome="blocked" if decision.action is PolicyAction.BLOCK else "allowed",
+                safe_metadata={"source": "input_security"},
+            )
+            get_security_event_sink().record(event)
+    except (SecurityAnalysisError, ValueError, TypeError):
+        return _security_unavailable(request)
+    if decision.action is PolicyAction.BLOCK:
+        return _security_policy_rejected(request)
+    try:
         outcome = get_query_service().query(question, scope=_scope(context))
     except (AuthenticationError, AuthenticationUnavailableError, AuthorizationDeniedError) as error:
         return _auth_error(error, request)
@@ -326,6 +358,8 @@ async def query(
         return _rag_unavailable("RAG_EMBEDDING_UNAVAILABLE", request)
     except RetrievalUnavailableError:
         return _rag_unavailable("RAG_RETRIEVAL_UNAVAILABLE", request)
+    except SecurityContextInspectionUnavailableError:
+        return _security_unavailable(request)
     except GenerationUnavailableError:
         return _rag_unavailable("RAG_GENERATION_UNAVAILABLE", request)
     data = {
@@ -487,6 +521,37 @@ def _rag_unavailable(code: str, request: Request) -> JSONResponse:
         content={
             "success": False,
             "error": {"code": code, "message": "The knowledge base is unavailable right now."},
+            "request_id": request.state.request_id,
+        },
+    )
+
+
+def _security_policy_rejected(request: Request) -> JSONResponse:
+    return JSONResponse(
+        status_code=403,
+        content={
+            "success": False,
+            "error": {
+                "code": "SECURITY_POLICY_REJECTED",
+                "message": (
+                    "This request could not be processed because it conflicts with the "
+                    "application's security policy."
+                ),
+            },
+            "request_id": request.state.request_id,
+        },
+    )
+
+
+def _security_unavailable(request: Request) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={
+            "success": False,
+            "error": {
+                "code": "SECURITY_ANALYSIS_UNAVAILABLE",
+                "message": "The request security service is unavailable right now.",
+            },
             "request_id": request.state.request_id,
         },
     )
