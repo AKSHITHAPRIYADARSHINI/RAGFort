@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 from functools import lru_cache
 
 from fastapi import Cookie, Header
@@ -33,37 +34,79 @@ def get_settings() -> Settings:
     return Settings()
 
 
-def get_query_service() -> QueryService:
-    settings = get_settings()
+def _canonical_role_ids(value: str) -> frozenset[str] | None:
+    """Parse the persisted role ACL using its authorization semantics.
+
+    Role ACL order is not significant.  Malformed or empty persisted ACLs are
+    deliberately ineligible rather than being interpreted permissively.
+    """
+    try:
+        roles = json.loads(value)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+    if not isinstance(roles, list) or not roles:
+        return None
+    if any(not isinstance(role, str) or not role.strip() for role in roles):
+        return None
+    return frozenset(roles)
+
+
+def make_authoritative_version_validator(
+    session_factory: Callable,
+) -> Callable[[list[str], RetrievalScope], set[str]]:
+    """Return the batched PostgreSQL admission check for Qdrant candidates.
+
+    Qdrant is a derived index: its payload narrows the candidate set only.
+    This validator is the final lifecycle and authorization authority.
+    """
 
     def authoritative_version_ids(version_ids: list[str], scope: RetrievalScope) -> set[str]:
         if not version_ids:
             return set()
-        with get_document_session_factory()() as session:
+        with session_factory() as session:
             rows = session.execute(
                 select(DocumentVersionRecord, DocumentRecord)
                 .join(DocumentRecord, DocumentVersionRecord.document_id == DocumentRecord.id)
                 .where(DocumentVersionRecord.id.in_(version_ids))
             ).all()
-        return {
-            version.id
-            for version, document in rows
-            if document.current_version_id == version.id
-            and document.status == "INDEXED"
-            and version.status == "INDEXED"
-            and version.index_state == "INDEXED"
-            and document.tenant_id == scope.tenant_id
-            and version.tenant_id == scope.tenant_id
-            and version.classification in scope.allowed_classifications
-            and bool(set(scope.role_ids).intersection(json.loads(version.allowed_role_ids_json)))
-        }
+        eligible: set[str] = set()
+        for version, document in rows:
+            document_roles = _canonical_role_ids(document.allowed_role_ids_json)
+            version_roles = _canonical_role_ids(version.allowed_role_ids_json)
+            if (
+                document.current_version_id == version.id
+                and version.current_version
+                and document.status == "INDEXED"
+                and version.status == "INDEXED"
+                and version.index_state == "INDEXED"
+                and document.tenant_id == scope.tenant_id
+                and version.tenant_id == scope.tenant_id
+                # A version is an immutable snapshot of the document access
+                # boundary.  Compare ACL meaning, not JSON serialization.
+                and version.classification == document.classification
+                and version.classification in scope.allowed_classifications
+                and version.department == document.department
+                and version.authorization_metadata_version
+                == document.authorization_metadata_version
+                and document_roles is not None
+                and document_roles == version_roles
+                and bool(set(scope.role_ids).intersection(document_roles))
+            ):
+                eligible.add(version.id)
+        return eligible
+
+    return authoritative_version_ids
+
+
+def get_query_service() -> QueryService:
+    settings = get_settings()
 
     return QueryService(
         embeddings=HashEmbeddingService(),
         retriever=QdrantRetriever(
             QdrantClient(url=settings.qdrant_url),
             settings.qdrant_collection,
-            authoritative_version_ids,
+            make_authoritative_version_validator(get_document_session_factory()),
         ),
         context_builder=ContextBuilder(
             max_chunks=settings.rag_top_k, max_context_tokens=settings.rag_max_context_tokens

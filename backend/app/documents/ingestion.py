@@ -25,7 +25,11 @@ from backend.app.documents.persistence import DocumentRecord, DocumentVersionRec
 from backend.app.rag.chunking import DocumentChunker
 from backend.app.rag.embeddings import EmbeddingService
 from backend.app.rag.models import Document
-from backend.app.rag.retrieval import QdrantRetriever, RetrievalUnavailableError
+from backend.app.rag.retrieval import (
+    PHASE4_SECURITY_METADATA_VERSION,
+    QdrantRetriever,
+    RetrievalUnavailableError,
+)
 
 MAX_UPLOAD_BYTES = 1_000_000
 MAX_EXTRACTED_CHARS = 200_000
@@ -439,6 +443,7 @@ class DocumentService:
             "allowed_role_ids": list(assignment.allowed_role_ids),
             "department": assignment.department,
             "authorization_metadata_version": assignment.metadata_version,
+            "security_metadata_version": PHASE4_SECURITY_METADATA_VERSION,
             "approval_status": "approved",
             "document_status": DocumentStatus.INDEXED,
             "index_state": "INDEXED",
