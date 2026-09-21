@@ -11,6 +11,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 export function listDocuments() { return request<{ documents: DocumentSummary[] }>("/api/v1/documents"); }
 export function uploadDocument(file: File) { const form = new FormData(); form.append("file", file); return request<DocumentSummary>("/api/v1/documents", { method: "POST", body: form }); }
+export function getDocument(id: string) { return request<DocumentSummary>(`/api/v1/documents/${id}`); }
 export function getDocumentSecurity(id: string) { return request<DocumentSummary>(`/api/v1/documents/${id}/security`); }
 export function transitionDocument(id: string, action: "approve" | "quarantine") { return request<DocumentSummary>(`/api/v1/documents/${id}/${action}`, { method: "POST" }); }
 export function deleteDocument(id: string) { return request<DocumentSummary>(`/api/v1/documents/${id}`, { method: "DELETE" }); }
