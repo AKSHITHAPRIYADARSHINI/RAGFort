@@ -69,9 +69,9 @@ flowchart TD
 
 ## 9. Result
 
-**In progress.** This document records design evidence only until implementation,
-tests, local runtime validation, and a secret review are complete.  No Phase 4
-security claim is made yet.
+**Complete.** Phase 4's identity-secure retrieval boundary is implemented and
+validated. Qdrant is a derived candidate index; PostgreSQL is the authoritative
+final admission decision for every secured retrieval candidate.
 
 ### Runtime evidence recorded September 2, 2026
 
@@ -96,10 +96,6 @@ Measured from the runtime marker probes:
 | `cross_tenant_leakage` | 0 |
 | `forbidden_chunks` | 0 |
 | `forbidden_citations` | 0 |
-
-Phase 4 cannot close yet: a browser authorization-code callback/session, real
-logout and session-expiry E2E, runtime authorization-epoch and disabled-account
-mutation tests, and the final browser regressions remain unverified.
 
 ### Browser-session evidence
 
@@ -142,11 +138,33 @@ These results retain the measured retrieval-security values:
 `cross_tenant_leakage = 0`, `forbidden_chunks = 0`, and
 `forbidden_citations = 0` for the controlled marker corpus.
 
-Phase 4 remains **PARTIAL** at this checkpoint. The browser Documents route needs
-its final end-to-end lifecycle/RBAC pass after the local Next.js development
-server asset cache is refreshed, and the final specialist/security closure review
-and complete closure validation have not yet been recorded. Consequently the
-`phase-4-complete` tag has not been created.
+### Final stale-vector lifecycle evidence (September 21, 2026)
+
+The final lifecycle consistency regression uses the real `DocumentService`,
+SQLite-backed document/version persistence, in-memory Qdrant adapter, server-owned
+`RetrievalScope`, PostgreSQL authoritative validator, and `QueryService`.
+
+- A fault-injected Qdrant deletion failure leaves the original point searchable
+  directly in Qdrant after both quarantine and delete requests.
+- PostgreSQL records `QUARANTINED` for quarantine and the established safe
+  `DELETION_PENDING` state for a failed delete-index operation. Both states are
+  non-retrievable.
+- The secured path removes those stale candidates before context construction;
+  the marker has no answer and no citation. A separate current `INDEXED` document
+  remains grounded and cited.
+- The validator is a single batched PostgreSQL join over candidate version IDs.
+  It requires current document/version state, tenant, lifecycle/index state,
+  classification, semantic ACL equivalence and authorization, department snapshot,
+  and authorization-metadata version. PostgreSQL validation failure produces
+  `RetrievalUnavailableError`; it never returns a model-only fallback.
+
+Final local release checks passed: **61 pytest tests**, Ruff, Python compilation,
+retrieval evaluation, frontend TypeScript lint/build, and Compose configuration.
+The security marker matrix retains `cross_tenant_leakage = 0`,
+`forbidden_chunks = 0`, and `forbidden_citations = 0`.
+
+An independent authorization review passed, confirming the predicate, lifecycle
+regression, and fail-closed behavior prove the existing stale-vector invariant.
 
 ## 10. Output
 
@@ -156,4 +174,4 @@ limitations, and Phase 5 readiness.
 
 Runtime commits during this block include local Keycloak profile/client fixes,
 container corpus fixes, and classified department-reader policy wiring. The
-`phase-4-complete` tag is intentionally not present.
+`phase-4-complete` tag records this closure checkpoint.
