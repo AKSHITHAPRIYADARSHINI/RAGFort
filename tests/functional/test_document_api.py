@@ -66,15 +66,18 @@ def test_document_endpoints_use_safe_envelopes(monkeypatch) -> None:
         )
         approved = client.post("/api/v1/documents/doc_test/approve")
         findings = client.get("/api/v1/documents/doc_test/security")
+        deleted = client.delete("/api/v1/documents/doc_test")
 
         assert listed.status_code == 200
         assert listed.json()["data"]["documents"][0]["document_id"] == "doc_test"
         assert uploaded.status_code == 200 and uploaded.json()["request_id"].startswith("req_")
         assert service.upload_access is not None
         assert service.upload_access.tenant_id == "tenant_acme"
-        assert service.upload_access.allowed_role_ids == ("admin",)
+        assert service.upload_access.allowed_role_ids == ("admin", "reviewer")
         assert approved.json()["data"]["status"] == "INDEXED"
         assert findings.json()["data"]["findings"] == []
+        assert deleted.status_code == 200
+        assert "_allowed_role_ids" not in deleted.json()["data"]
     finally:
         app.dependency_overrides.clear()
 
@@ -92,6 +95,21 @@ def test_upload_errors_do_not_leak_file_or_parser_details(monkeypatch) -> None:
             "code": "FILE_TOO_LARGE",
             "message": "This file exceeds the allowed size.",
         }
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_contributor_uploads_remain_reviewable_by_tenant_privileged_roles(monkeypatch) -> None:
+    service = FakeDocumentService()
+    monkeypatch.setattr("backend.app.main.get_document_service", lambda: service)
+    app.dependency_overrides[require_request_context] = lambda: _context("contributor")
+    try:
+        response = TestClient(app).post(
+            "/api/v1/documents", files={"file": ("policy.txt", b"safe", "text/plain")}
+        )
+
+        assert response.status_code == 200
+        assert service.upload_access.allowed_role_ids == ("admin", "contributor", "reviewer")
     finally:
         app.dependency_overrides.clear()
 

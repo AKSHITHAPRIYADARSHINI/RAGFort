@@ -221,10 +221,16 @@ def _scope(context: RequestContext) -> RetrievalScope:
 
 
 def _upload_access_assignment(context: RequestContext) -> DocumentAccessAssignment:
-    """Derive new-document access state from the canonical principal only."""
+    """Derive reviewable access state from the canonical principal only.
+
+    Contributors can submit documents but cannot review them. Every new
+    tenant-scoped document consequently includes the tenant's privileged review
+    roles in its server-owned ACL, so a contributor submission cannot become
+    permanently unreviewable.
+    """
     return DocumentAccessAssignment(
         tenant_id=context.tenant_id,
-        allowed_role_ids=tuple(sorted(context.roles)),
+        allowed_role_ids=tuple(sorted(context.roles | {"reviewer", "admin"})),
         department=context.attribute_map.get("department"),
     )
 
@@ -470,7 +476,9 @@ async def delete_document(
         result = get_document_service().delete(document_id)
     except DocumentError as error:
         return _document_error(error, request, 404 if error.code == "DOCUMENT_NOT_FOUND" else 400)
-    return JSONResponse({"success": True, "data": result, "request_id": request.state.request_id})
+    return JSONResponse(
+        {"success": True, "data": _public_document(result), "request_id": request.state.request_id}
+    )
 
 
 def _rag_unavailable(code: str, request: Request) -> JSONResponse:
