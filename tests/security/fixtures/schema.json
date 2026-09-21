@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RAGFort Phase 5 synthetic security fixture",
+  "type": "object",
+  "required": [
+    "test_id",
+    "attack_family",
+    "payload",
+    "expected_categories",
+    "expected_action",
+    "expected_retrieval",
+    "expected_event"
+  ],
+  "properties": {
+    "test_id": {"type": "string", "pattern": "^P5-(ATT|BEN)-[0-9]{3}$"},
+    "attack_family": {"type": "string"},
+    "payload": {"type": "string", "minLength": 1},
+    "context_payload": {"type": "string"},
+    "expected_categories": {
+      "type": "array",
+      "items": {"type": "string", "enum": [
+        "PROMPT_INJECTION", "INDIRECT_PROMPT_INJECTION", "SYSTEM_PROMPT_EXTRACTION",
+        "DATA_EXFILTRATION", "CROSS_TENANT_EXFILTRATION", "ROLE_MANIPULATION",
+        "IDENTITY_MANIPULATION", "INSTRUCTION_OVERRIDE", "CONTEXT_MANIPULATION",
+        "RETRIEVAL_MANIPULATION", "ENCODED_PAYLOAD", "TOOL_ABUSE",
+        "SUSPICIOUS_CONTROL_LANGUAGE"
+      ]}
+    },
+    "expected_action": {"type": "string", "enum": ["ALLOW", "ALLOW_AND_LOG", "BLOCK"]},
+    "expected_retrieval": {"type": "boolean"},
+    "expected_event": {"type": "boolean"},
+    "expected_context_action": {"type": "string", "enum": ["ALLOW", "ALLOW_WITH_SECURITY_EVENT", "DROP_CHUNK", "BLOCK_REQUEST"]},
+    "notes": {"type": "string"}
+  },
+  "additionalProperties": false
+}
