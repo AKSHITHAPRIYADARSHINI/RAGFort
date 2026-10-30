@@ -70,4 +70,38 @@ The final `npm audit --json --cache ../.npm-cache` completed its registry query 
 
 Residual PostCSS advisory IDs are GHSA-qx2v-qp2m-jg93, GHSA-6g55-p6wh-862q, GHSA-fxqj-rqcc-2cmp, and GHSA-r28c-9q8g-f849. The maintainer advisories describe [untrusted CSS stringification into HTML](https://github.com/postcss/postcss/security/advisories/GHSA-qx2v-qp2m-jg93) and [attacker-controlled CSS source-map loading](https://github.com/postcss/postcss/security/advisories/GHSA-6g55-p6wh-862q). Repository inspection finds only checked-in CSS and no user-CSS compilation or HTML stringification surface. Residual sharp IDs are GHSA-f88m-g3jw-g9cj and GHSA-rgj7-g3m4-5g8c; the [maintainer advisory](https://github.com/lovell/sharp/security/advisories/GHSA-rgj7-g3m4-5g8c) requires processing untrusted image input. This frontend has no image upload/serving route, next/image use, remote-image patterns, or custom rewrite configuration. Backend document uploads are not exposed as frontend image assets. These applicability conclusions are source-based inferences, not exploit tests. No reproducible violation of an established release invariant was found for these remaining advisories, so they are NON-BLOCKING TECHNICAL DEBT; reevaluate before adding CSS/image processing surfaces.
 
-Deprecation warnings in datetime handling and the Starlette/httpx test-client adapter remain NON-BLOCKING TECHNICAL DEBT. Runtime failure/recovery evidence is separately recorded in `docs/phase-5-runtime-validation.md`; it is not relabeled as browser evidence here. Final authenticated browser evidence and clean closure commit remain the coordinating agent's release gates. The executed unit/integration, metric, controlled-corpus, build, and dependency-applicability QA gates PASS.
+Deprecation warnings in datetime handling and the Starlette/httpx test-client adapter remain NON-BLOCKING TECHNICAL DEBT. Runtime failure/recovery evidence is separately recorded in `docs/phase-5-runtime-validation.md`. At the time of the 2026-09-29 review the authenticated browser gate and closure commit were still pending; the final 2026-10-30 evidence below closes those gates. The executed unit/integration, metric, controlled-corpus, build, and dependency-applicability QA gates PASS.
+
+## Final frozen release matrix — 2026-10-30
+
+The final candidate was validated from the clean `phase-5-attack-detection`
+branch at `64ae0acc81d8f4606fe2c1c3e5f1becf60cd8efc`, with only release-evidence
+updates made afterward.
+
+| Gate | Final actual result |
+| --- | --- |
+| Full pytest | 128 passed, 668 deprecation warnings |
+| Focused security, Phase 4 authorization, Phase 5 authorization, and context suite | 47 passed, 591 deprecation warnings |
+| Ruff | All checks passed |
+| Python compilation | `compileall -q backend evaluation tests` exited 0 |
+| Phase 5 controlled evaluation | 24/24 executed records passed (15 attacks, 8 benign, one extra cross-tenant ALLOW probe) |
+| Phase 2 retrieval evaluation | 20 documents/chunks; recall and hit rate 1.0, MRR 0.9 at k=3, 5, and 8 |
+| Frontend TypeScript lint | Passed |
+| Frontend production build | Passed with Next.js 15.5.26; `/`, `/_not-found`, and `/documents` prerendered |
+| Runtime readiness | API liveness/readiness, PostgreSQL, Qdrant, Keycloak, and production frontend all healthy/responding |
+| Production authenticated browser gate | Eight ACME scenarios and one separate Finance Reader scenario passed; evidence and request IDs in `phase-5-runtime-validation.md` |
+
+The final controlled Phase 5 metrics remained unchanged: attack detection 1.0;
+attack block 10/15 (0.6667); false positive 0.0; false negative 0.0; indirect
+injection detection 1.0; malicious context admission 0.0; cross-tenant leakage 0;
+forbidden chunks 0; forbidden citations 0. They apply to the controlled corpus
+only.
+
+The sandboxed frontend build first failed on the Windows ancestor-directory
+`readlink` permission and passed when rerun with the required elevated access.
+Next.js emitted its existing multiple-lockfile workspace-root warning. Neither
+needed an application-code change. The **128-warning** and **47-warning** groups
+are existing datetime/Starlette deprecations and remain non-blocking. The
+PostCSS, Sharp, and developer-tool advisory findings and their reachability
+analysis remain as previously recorded above; no frontend dependency changed
+after the patched Next.js 15.5.26 candidate.

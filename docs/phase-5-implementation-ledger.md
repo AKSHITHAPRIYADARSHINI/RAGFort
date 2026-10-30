@@ -1,9 +1,9 @@
 # Phase 5 release-candidate implementation ledger
 
 Scope frozen to P5-REQ-001–015 and inherited Phase 4 invariants. The baseline is
-`c52b0f2`; final evidence/remediation belongs to the closure commit containing this
-ledger, identified by the annotated `phase-5-complete` tag only after board approval.
-No tag or completion is implied by a pending row.
+`c52b0f2`; final evidence belongs to the validated closure commit. The annotated
+`phase-5-complete` tag identifies that commit after all review-board members
+reported PASS.
 
 | Requirement | Threat / invariant | Owner / implementation | Executed expected → actual evidence | Reviewer / release status |
 | --- | --- | --- | --- | --- |
@@ -16,12 +16,12 @@ No tag or completion is implied by a pending row.
 | P5-REQ-007 | TM-006/007, INV-005 | Backend: analyzer.py | Unexpected errors/malformed results now typed unavailable; detector fault 503, zero downstream calls, recovery grounded | AppSec fix independently reviewed by Code: PASS |
 | P5-REQ-008 | TM-005/009, INV-012 | Context: context_guard.py, service.py | Three malicious chunks presented, three dropped, zero admitted; context failure skips construction/generation | QA + Runtime: PASS |
 | P5-REQ-009 | TM-005, INV-012 | Context: generated phase5_provenance | Admitted copy retains document/version/chunk/auth/inspection state; vector-supplied provenance overwritten; no citation/prompt exposure | AppSec fix independently reviewed by Code: PASS |
-| P5-REQ-010 | TM-005, INV-012 | ContextBuilder + extractive provider | Untrusted source delimiters; provider has no tools or secondary retrieval; malicious authorized fixture excluded | Code: PASS; browser indirect check pending |
+| P5-REQ-010 | TM-005, INV-012 | ContextBuilder + extractive provider | Untrusted source delimiters; provider has no tools or secondary retrieval; production browser indirect query returned insufficient context, null answer, zero sources, and a live `drop_chunk` event | Code + Runtime: PASS |
 | P5-REQ-011 | TM-007/008, INV-008 | Backend: events.py, audit.py, route callback | Input and context events persist before sensitive continuation; actual SQL rows minimized; mandatory failure 503 and recovery pass | AppSec + Runtime: PASS |
 | P5-REQ-012 | TM-003/004, INV-001/002/006/011 | Authorization: SQL validator, RetrievalScope | Forced ALLOW leaves canonical ACME viewer unchanged; foreign results/citations denied; seven authoritative stale-vector mutations denied | Independent Authorization: PASS, 44 checks |
 | P5-REQ-013 | TM-001–009 | Evaluation: phase5_attack_evaluation.py | 24 executed records: 15 attacks, 8 benign, one extra ALLOW isolation probe; all nine metrics derive from observations; 18 integrity regressions pass | QA + Code: PASS |
-| P5-REQ-014 | TM-007 | Frontend: page.tsx, cookie-only client | Distinct grounded/insufficient/rejected/unavailable UI; TypeScript/build tests, authenticated scenarios pending final patched frontend | Browser gate pending |
-| P5-REQ-015 | TM-001–009 | Release coordinator: report/review records | Separate unit/corpus/runtime/browser/review evidence with request IDs and scope qualifications | Final board pending |
+| P5-REQ-014 | TM-007 | Frontend: page.tsx, cookie-only client | Grounded, insufficient, rejected, and authenticated states observed in real browser; TypeScript lint and Next 15.5.26 production build pass | QA + Runtime: PASS |
+| P5-REQ-015 | TM-001–009 | Release coordinator: report/review records | Full frozen matrix and nine authenticated production browser scenarios recorded with request IDs; five review roles report PASS | Final review board: PASS |
 
 ## Evidence references
 
