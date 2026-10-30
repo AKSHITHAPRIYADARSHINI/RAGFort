@@ -2,7 +2,10 @@ import pytest
 
 from backend.app.security.analyzer import InputSecurityAnalyzer
 from backend.app.security.detector import DeterministicAttackDetector
-from backend.app.security.failures import SecurityInputTooLargeError
+from backend.app.security.failures import (
+    SecurityDetectionUnavailableError,
+    SecurityInputTooLargeError,
+)
 from backend.app.security.models import (
     AttackCategory,
     AttackDetectionResult,
@@ -94,3 +97,17 @@ def test_context_provenance_rejects_unvalidated_chunks() -> None:
             authorization_validated=False,
             context_decision=ContextDecision.DROP_CHUNK,
         )
+
+
+@pytest.mark.parametrize("malformed", [False, True])
+def test_detector_exceptions_and_malformed_results_are_stable_unavailability(malformed) -> None:
+    class BrokenDetector:
+        def analyze(self, *_args, **_kwargs):
+            if malformed:
+                return object()
+            raise RuntimeError("private detector internals")
+
+    with pytest.raises(
+        SecurityDetectionUnavailableError, match="Security detection is unavailable"
+    ):
+        InputSecurityAnalyzer(BrokenDetector()).analyze("normal question")

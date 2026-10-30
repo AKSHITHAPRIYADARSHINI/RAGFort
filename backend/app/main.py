@@ -38,9 +38,8 @@ from backend.app.rag.retrieval import RetrievalScope, RetrievalUnavailableError
 from backend.app.security.events import SecurityEventFactory
 from backend.app.security.failures import (
     SecurityAnalysisError,
-    SecurityContextInspectionUnavailableError,
 )
-from backend.app.security.models import PolicyAction
+from backend.app.security.models import ContextInspectionResult, PolicyAction
 
 app = FastAPI(title="RAGFort API", version="0.1.0", docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(
@@ -350,15 +349,38 @@ async def query(
         return _security_unavailable(request)
     if decision.action is PolicyAction.BLOCK:
         return _security_policy_rejected(request)
+
+    def record_context_inspection(inspection: ContextInspectionResult) -> None:
+        event = SecurityEventFactory().from_detection(
+            inspection.detection,
+            get_security_policy().decide(inspection.detection),
+            request_id=request.state.request_id,
+            canonical_subject_id=context.user_id,
+            canonical_tenant_id=context.tenant_id,
+            route="/api/v1/query",
+            outcome=inspection.decision.value,
+            safe_metadata={
+                "source": "context_security",
+                "context_decision": inspection.decision.value,
+                "retrieval_executed": True,
+            },
+        )
+        get_security_event_sink().record(event)
+
     try:
-        outcome = get_query_service().query(question, scope=_scope(context))
+        outcome = get_query_service().query(
+            question,
+            scope=_scope(context),
+            record_context_inspection=record_context_inspection,
+            request_id=request.state.request_id,
+        )
     except (AuthenticationError, AuthenticationUnavailableError, AuthorizationDeniedError) as error:
         return _auth_error(error, request)
     except EmbeddingUnavailableError:
         return _rag_unavailable("RAG_EMBEDDING_UNAVAILABLE", request)
     except RetrievalUnavailableError:
         return _rag_unavailable("RAG_RETRIEVAL_UNAVAILABLE", request)
-    except SecurityContextInspectionUnavailableError:
+    except SecurityAnalysisError:
         return _security_unavailable(request)
     except GenerationUnavailableError:
         return _rag_unavailable("RAG_GENERATION_UNAVAILABLE", request)

@@ -42,7 +42,9 @@ def test_benign_security_discussion_is_retained_as_reference_data() -> None:
 
     result = ContextSecurityGuard().inspect([chunk])
 
-    assert result.safe_results == (chunk,)
+    assert len(result.safe_results) == 1
+    assert result.safe_results[0].text == chunk.text
+    assert result.safe_results[0].metadata["phase5_provenance"]["authorization_validated"] is True
     assert result.inspections[0].decision is ContextDecision.ALLOW
     assert result.inspections[0].provenance.context_detection_id is None
 
@@ -79,5 +81,32 @@ def test_low_risk_signal_is_retained_and_marked_for_security_event() -> None:
 
     result = ContextSecurityGuard(detector=_SuspiciousDetector()).inspect([chunk])  # type: ignore[arg-type]
 
-    assert result.safe_results == (chunk,)
+    assert len(result.safe_results) == 1
+    assert result.safe_results[0].text == chunk.text
     assert result.inspections[0].decision is ContextDecision.ALLOW_WITH_SECURITY_EVENT
+
+
+def test_admitted_context_retains_only_server_created_inspection_provenance() -> None:
+    from backend.app.rag.citations import CitationFormatter
+    from backend.app.rag.context import ContextBuilder
+
+    chunk = _result(
+        "Factual reference", title="Reference", source="fixture",
+        phase5_provenance={"authorization_validated": False},
+    )
+    guarded = ContextSecurityGuard().inspect([chunk], request_id="trusted-request")
+    context = ContextBuilder().build(list(guarded.safe_results))
+    provenance = context.chunks[0].metadata["phase5_provenance"]
+    assert provenance == {
+        "document_id": "document-1",
+        "version_id": "version-1",
+        "chunk_id": "chunk-1",
+        "tenant_id": "tenant_acme",
+        "classification": "INTERNAL",
+        "authorization_validated": True,
+        "context_decision": ContextDecision.ALLOW,
+        "context_detection_id": None,
+    }
+    assert "phase5_provenance" not in context.context_text
+    assert "authorization_validated" not in repr(CitationFormatter().format(context))
+    assert chunk.metadata["phase5_provenance"] == {"authorization_validated": False}

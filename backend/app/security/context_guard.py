@@ -6,7 +6,7 @@ already passed the Phase 4 Qdrant and PostgreSQL checks.
 """
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, replace
 
 from backend.app.rag.models import RetrievalResult
 from backend.app.security.detector import DeterministicAttackDetector
@@ -83,7 +83,17 @@ class ContextSecurityGuard:
                     )
                 )
                 if decision is not ContextDecision.DROP_CHUNK:
-                    safe_results.append(result)
+                    # Server-owned inspection evidence follows the admitted chunk
+                    # through ContextBuilder. Never trust a vector payload's copy.
+                    safe_results.append(
+                        replace(
+                            result,
+                            metadata={
+                                **result.metadata,
+                                "phase5_provenance": asdict(inspections[-1].provenance),
+                            },
+                        )
+                    )
             return ContextGuardResult(tuple(safe_results), tuple(inspections))
         except SecurityContextInspectionUnavailableError:
             raise

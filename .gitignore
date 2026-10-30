@@ -25,3 +25,10 @@ Thumbs.db
 *.log
 .playwright-cli/
 .env.keycloak.local
+
+# Local release validation artifacts (never release evidence)
+/ragfort-documents.db
+/.npm-cache/
+/.pip-audit-cache/
+/.pytest-*/
+/output/playwright/

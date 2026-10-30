@@ -1,5 +1,6 @@
 import re
 import time
+from collections.abc import Callable
 
 from backend.app.rag.citations import CitationFormatter
 from backend.app.rag.context import ContextBuilder
@@ -8,6 +9,7 @@ from backend.app.rag.generation import GenerationService, GenerationUnavailableE
 from backend.app.rag.models import QueryOutcome
 from backend.app.rag.retrieval import RetrievalScope, Retriever
 from backend.app.security.context_guard import ContextSecurityGuard
+from backend.app.security.models import ContextInspectionResult
 
 
 class QueryService:
@@ -36,7 +38,14 @@ class QueryService:
         # authenticated route always uses the guarded Phase 5 service.
         self.context_guard = context_guard
 
-    def query(self, question: str, scope: RetrievalScope | None = None) -> QueryOutcome:
+    def query(
+        self,
+        question: str,
+        scope: RetrievalScope | None = None,
+        *,
+        record_context_inspection: Callable[[ContextInspectionResult], None] | None = None,
+        request_id: str | None = None,
+    ) -> QueryOutcome:
         """Execute retrieval using an optional trusted policy scope.
 
         Phase 4 API wiring will require ``scope`` for every protected query.
@@ -68,7 +77,11 @@ class QueryService:
                 trace={**trace, "retrieved_chunks": 0} if self.dev_trace else None,
             )
         if self.context_guard is not None:
-            guarded = self.context_guard.inspect(usable)
+            guarded = self.context_guard.inspect(usable, request_id=request_id)
+            if record_context_inspection is not None:
+                for inspection in guarded.inspections:
+                    if inspection.detection.detected:
+                        record_context_inspection(inspection)
             usable = list(guarded.safe_results)
             if not usable:
                 return QueryOutcome(

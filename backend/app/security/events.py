@@ -102,8 +102,9 @@ class SecurityEvent:
         for key, value in safe_metadata.items():
             _require_nonempty(key, "safe_metadata key")
             normalized_key = key.casefold()
-            if normalized_key not in _SAFE_METADATA_FIELDS or any(
-                term in normalized_key for term in _FORBIDDEN_METADATA_NAMES
+            if (
+                normalized_key not in _SAFE_METADATA_FIELDS
+                or normalized_key in _FORBIDDEN_METADATA_NAMES
             ):
                 raise ValueError(f"safe_metadata field is not permitted: {key}")
             if not isinstance(value, (str, int, bool)):
